@@ -1,0 +1,233 @@
+﻿<Window x:Class="BrainCard.SubWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:BrainCard"
+        xmlns:ui="http://schemas.modernwpf.com/2019"
+        xmlns:host="clr-namespace:BrainCard.WinUIHost"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        mc:Ignorable="d"
+        ui:WindowHelper.UseModernWindowStyle="True"
+        ui:TitleBar.ExtendViewIntoTitleBar="True"
+        Title="CardCanvas"
+        x:Name="subwindow"
+        WindowStyle="None"
+        ScrollViewer.CanContentScroll="False"
+        SizeToContent="WidthAndHeight"
+        SnapsToDevicePixels="True"
+        AllowsTransparency="True">
+    <!--SizeChanged="SubWindow_SizeChanged"-->
+    <!-- WindowChromeの設定 -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome x:Name="chrome"
+                      CaptionHeight="0"
+                      CornerRadius="0"
+                      GlassFrameThickness="20"
+                      ResizeBorderThickness="5,5,20,20" />
+    </WindowChrome.WindowChrome>
+    <Window.Resources>
+        <Style x:Key="CustomToggleButtonStyle"
+               TargetType="ToggleButton">
+            <Setter Property="Background"
+                    Value="LightGray" />
+            <Setter Property="Foreground"
+                    Value="#FFF9F9F9" />
+            <Setter Property="BorderBrush"
+                    Value="Gray" />
+            <Setter Property="BorderThickness"
+                    Value="1" />
+            <Setter Property="Cursor"
+                    Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="border"
+                                CornerRadius="2"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <!-- マウスオーバー時のスタイル -->
+                            <Trigger Property="IsMouseOver"
+                                     Value="True">
+                                <Setter TargetName="border"
+                                        Property="Background"
+                                        Value="Gray" />
+                                <Setter TargetName="border"
+                                        Property="CornerRadius"
+                                        Value="2" />
+                            </Trigger>
+                            <!-- 押下時のスタイル -->
+                            <Trigger Property="IsPressed"
+                                     Value="True">
+                                <Setter TargetName="border"
+                                        Property="Background"
+                                        Value="DarkGray" />
+                                <Setter TargetName="border"
+                                        Property="CornerRadius"
+                                        Value="2" />
+                            </Trigger>
+                            <!-- チェック時のスタイル -->
+                            <Trigger Property="IsChecked"
+                                     Value="True">
+                                <Setter TargetName="border"
+                                        Property="Background"
+                                        Value="DimGray" />
+                                <Setter TargetName="border"
+                                        Property="CornerRadius"
+                                        Value="2" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <sys:Double x:Key="SwatchSize">32</sys:Double>
+    </Window.Resources>
+
+    <!-- Windowのテンプレートを再定義 -->
+    <Window.Template>
+        <ControlTemplate TargetType="Window">
+            <Border x:Name="windowBorder"
+                    BorderBrush="#01000000"
+                    BorderThickness="1,1,20,20"
+                    Margin="-1,-1,0,0"
+                    Padding="0,0,0,0"
+                    VerticalAlignment="Stretch"
+                    HorizontalAlignment="Stretch">
+                <Grid x:Name="RootGrid"
+                      VerticalAlignment="Stretch"
+                      HorizontalAlignment="Stretch">
+
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="45" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- カスタムタイトルバー -->
+                    <Grid x:Name="CustomTitleBar"
+                          Height="45"
+                          VerticalAlignment="Stretch"
+                          Background="#01000000"
+                          MouseLeftButtonDown="CustomTitleBar_MouseLeftButtonDown">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,0,0">
+                            <ToggleButton x:Name="inkToolbarToggleButton" Width="45"
+                                          Height="40"
+                                          IsChecked="{Binding IsPaneOpen, ElementName=InkToolbarSplitView, Mode=TwoWay}"
+                                          Background="{StaticResource AccentButtonBackground}"
+                                          Style="{StaticResource CustomToggleButtonStyle}"
+                                          Checked="ToggleButton_Checked"
+                                          Unchecked="ToggleButton_Unchecked">
+                                <Grid>
+                                    <TextBlock Text="&#xE76D;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="18"
+                                               Background="Transparent"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </ToggleButton>
+
+                            <ui:SplitView x:Name="InkToolbarSplitView"
+                                          HorizontalAlignment="Left"
+                                          HorizontalContentAlignment="Left"
+                                          Grid.Column="1"
+                                          Width="200"
+                                          d:IsPaneOpen="True"
+                                          Panel.ZIndex="100"
+                                          PaneOpening="SplitView_PaneOpening"
+                                          PaneClosed="SplitView_PaneClosed">
+                                <ui:SplitView.Pane>
+                                    <host:WinUIHostControl x:Name="CardInkToolbarHost"
+                                                          Width="200"
+                                                          HorizontalAlignment="Left" />
+                                </ui:SplitView.Pane>
+                            </ui:SplitView>
+                        </StackPanel>
+
+                        <!-- カスタムボタン -->
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    Grid.Column="1"
+                                    Margin="0,0,0,0">
+                            <!-- 任意のボタンをここに配置 -->
+
+                            <Button x:Name="ButtonKeep"
+                                    HorizontalAlignment="Right"
+                                    Margin="0,0,2,0"
+                                    Padding="0"
+                                    Width="55"
+                                    Height="40"
+                                    Click="ButtonKeep_Click"
+                                    Content="✔"
+                                    FontWeight="ExtraBold"
+                                    FontSize="23"
+                                    Foreground="Green"
+                                    FontFamily="DFGMaruGothicN-SB"
+                                    Style="{StaticResource AccentButtonStyle}" />
+
+                            <Button x:Name="ClearButton"
+                                    HorizontalAlignment="Right"
+                                    Margin="0,0,2,0"
+                                    Padding="0"
+                                    Width="55"
+                                    Height="40"
+                                    Click="ClearButton_Click"
+                                    Content="✖"
+                                    FontSize="23"
+                                    Foreground="Red"
+                                    FontFamily="DFGMaruGothicN-SB"
+                                    FontWeight="ExtraBold"
+                                    Style="{StaticResource AccentButtonStyle}">
+
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- ウィンドウのコンテンツ -->
+                    <ContentPresenter Grid.Row="1">
+
+                    </ContentPresenter>
+                </Grid>
+            </Border>
+        </ControlTemplate>
+    </Window.Template>
+
+    <!-- ウィンドウの内容 -->
+    <Grid x:Name="ContentRootGrid"
+          d:Height ="380"
+          d:Width="537"
+          Margin="0,0,0,0"
+          VerticalAlignment="Stretch"
+          HorizontalAlignment="Stretch">
+            <Grid x:Name="CardCanvasGrid"
+              d:Height="380"
+              d:Width="537"
+              Margin="0,0,0,0"
+              Background="White"
+              VerticalAlignment="Stretch"
+              HorizontalAlignment="Stretch">
+        </Grid>
+    </Grid>
+    <Window.Effect>
+        <DropShadowEffect BlurRadius="15"
+                          ShadowDepth="10"
+                          Direction="315"
+                          Color="Black"
+                          Opacity="0.6" />
+    </Window.Effect>
+        
+</Window>

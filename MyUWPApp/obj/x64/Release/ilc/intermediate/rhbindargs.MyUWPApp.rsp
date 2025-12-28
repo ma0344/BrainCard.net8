@@ -1,0 +1,16 @@
+﻿/osver:6.2
+/appcontainer
+"/runtime:mrt100_app"
+/eh:clr
+/pdb
+"/nativeLink:C:\Users\ma\.nuget\packages\runtime.win10-x64.microsoft.net.native.compiler\2.2.12-rel-31116-00\tools\x64\ilc\lib\Native\vmath.lib"
+/customImports
+/methodBodyFolding
+"C:\Users\ma\source\repos\BrainCard\MyUWPApp\obj\x64\Release\ilc\intermediate\MDIL\MyUWPApp.mdilexe"
+"/i:C:\Users\ma\source\repos\BrainCard\MyUWPApp\obj\x64\Release\ilc\intermediate\MDIL"
+"/out:C:\Users\ma\source\repos\BrainCard\MyUWPApp\obj\x64\Release\ilc\intermediate\Native\MyUWPApp.exe"
+"/pdbAltPath:C:\Users\ma\source\repos\BrainCard\MyUWPApp\bin\x64\Release\ilc"
+"/res:C:\Users\ma\source\repos\BrainCard\MyUWPApp\obj\x64\Release\ilc\intermediate\Native.res"
+"/i:C:\Users\ma\.nuget\packages\runtime.win10-x64.microsoft.net.native.sharedlibrary\2.2.8-rel-31116-00\tools\SharedLibrary\ret\MDIL"
+/shimexe
+"/classlib:SharedLibrary"

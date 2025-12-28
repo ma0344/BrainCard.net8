@@ -1,0 +1,403 @@
+﻿using Microsoft.Toolkit.Wpf.UI.XamlHost;
+using MyUWPApp;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
+using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
+using System.Windows.Shapes;
+using Windows.Graphics.Imaging;
+using Windows.UI.Input.Inking;
+using static BrainCard.Values;
+
+namespace BrainCard
+{
+    /// <summary>
+    /// Card.xaml の相互作用ロジック
+    /// </summary>
+    public partial class Card : Thumb, INotifyPropertyChanged
+    {
+        public event EventHandler CardClicked;
+        public event EventHandler CardSelected;
+        public event EventHandler EditRequested;
+        public event EventHandler DeleteRequested;
+        public event DragDeltaEventHandler CardDraging;
+        public event EventHandler CardDragCompleated;
+
+
+        public CustomInkCanvas CardInkCanvas;
+        public Windows.UI.Xaml.Controls.InkCanvas CardCanvas { get; set; }
+        public Windows.UI.Input.Inking.InkPresenter CardPresenter { get; set; }
+        public Border CardBorder;
+        public Image CardImage;
+        public Image TestImage;
+        public MainWindow mainWindow;
+        private string _recognizedText;
+        public string RecognizedText
+        {
+            get
+            { return _recognizedText; }
+            set
+            {
+                if (_recognizedText != value)
+                {
+                    _recognizedText = value;
+                    OnPropertyChanged(nameof(RecognizedText));
+                }
+            }
+        }
+
+        private int _z;
+        public int Z
+        {
+            get
+            {
+                //_z = Canvas.GetZIndex(this);
+                return _z;
+            }
+            set
+            {
+                if (value != _z)
+                {
+                    _z = value;
+                    Canvas.SetZIndex(this, _z);
+                    OnPropertyChanged(nameof(Z));
+                }
+            }
+        }
+
+        private double _Left = 0;
+        public double Left
+        {
+            get
+            {
+                return _Left;
+            }
+            set
+            {
+                if (value != _Left)
+                {
+                    _Left = value;
+                    _Right = value + ActualWidth;
+                    _Center.X = value + ActualWidth / 2;
+                    OnPropertyChanged(nameof(Left));
+                }
+            }
+        }
+
+        private double _Right;
+        public double Right
+        {
+            get
+            {
+                return _Right;
+            }
+        }
+
+        private double _Top = 0;
+        public double Top
+        {
+            get
+            {
+                return _Top;
+            }
+            set
+            {
+                if (value != _Top)
+                {
+                    _Top = value;
+                    _Bottom = value + ActualHeight;
+                    _Center.Y = value + ActualHeight / 2;
+                    OnPropertyChanged(nameof(Top));
+                }
+            }
+        }
+
+        private double _Bottom;
+        public double Bottom
+        {
+            get
+            {
+                return _Bottom;
+            }
+        }
+
+        private Point _Center;
+        public Point Center
+        {
+            get
+            {
+                return _Center;
+            }
+        }
+
+
+        public Card(MainWindow window, CustomInkCanvas inkCanvas, ImageSource imageSource)
+        {
+            InitializeComponent();
+            this.Name += "_" + Guid.NewGuid().ToString().Replace("-", "");
+            this.DataContext = window.DataContext;
+            this.Resources = window.Resources;
+
+            // Enable OS pen press-and-hold (right-click) for context menu.
+            Stylus.SetIsPressAndHoldEnabled(this, true);
+            Stylus.SetIsFlicksEnabled(this, false);
+
+            // Create a new canvas for this card, but copy only stroke data (avoid cloning UI trees).
+            CardInkCanvas = new CustomInkCanvas(Writable: false);
+            InkStrokeContainer strokeContainer = inkCanvas.CloneStrokeContainer();
+            foreach (var stroke in strokeContainer.GetStrokes())
+            {
+                CardInkCanvas.InnerPresenter.StrokeContainer.AddStroke(stroke.Clone());
+            }
+
+            CardCanvas = CardInkCanvas.InnerInkCanvas;
+            CardPresenter = CardCanvas.InkPresenter;
+            CreateCardElement(imageSource);
+
+            var contextMenu = new ContextMenu { DataContext = window.DataContext };
+
+            var menuItemEdit = new MenuItem { Name = "MenuEdit", Header = "編集" };
+            contextMenu.Items.Add(menuItemEdit);
+
+            var menuItemDelete = new MenuItem { Name = "MenuDelete", Header = "削除" };
+            contextMenu.Items.Add(menuItemDelete);
+
+            this.ContextMenu = contextMenu;
+
+            menuItemEdit.Click += MenuItemEdit_Click;
+            menuItemDelete.Click += MenuItemDelete_Click;
+
+            // Place context menu at pointer position (works for mouse and pen press-and-hold).
+            this.ContextMenuOpening += Card_ContextMenuOpening;
+
+            mainWindow = window;
+            this.IsManipulationEnabled = true;
+            this.DragCompleted += Card_DragCompleted;
+            this.DragDelta += Card_DragDelta;
+            this.DragStarted += Card_DragStarted;
+            this.ManipulationCompleted += Card_ManipulationCompleted;
+            this.ManipulationDelta += Card_ManipulationDelta;
+            this.ManipulationStarting += Card_ManipulationStarting;
+            this.ManipulationStarted += Card_ManipulationStarted;
+            this.MouseDoubleClick += Card_MouseDoubleClick;
+        }
+
+        public Windows.UI.Xaml.Controls.InkCanvas InkCanvasClone()
+        {
+            var ClonedCanvas = new Windows.UI.Xaml.Controls.InkCanvas
+            {
+                Width = CardCanvas.Width,
+                Height = CardCanvas.Height
+            };
+            InkPresenterClone(ClonedCanvas);
+            return ClonedCanvas;
+        }
+
+        public void InkPresenterClone(Windows.UI.Xaml.Controls.InkCanvas ClonedCanvas)
+        {
+            foreach (var stroke in CardPresenter.StrokeContainer.GetStrokes())
+            {
+                ClonedCanvas.InkPresenter.StrokeContainer.AddStroke(stroke.Clone());
+            }
+        }
+
+        public void SetInkCanvas(Windows.UI.Xaml.Controls.InkCanvas inkCanvas)
+        {
+            this.CardCanvas.InkPresenter.StrokeContainer.Clear();
+
+            foreach (var stroke in inkCanvas.InkPresenter.StrokeContainer.GetStrokes())
+            {
+                this.CardCanvas.InkPresenter.StrokeContainer.AddStroke(stroke.Clone());
+            }
+
+        }
+
+
+        public ControlTemplate CardFactory(ImageSource i)
+        {
+            var png = @"TestPict.png";
+            ControlTemplate cardTemplate = new ControlTemplate();
+            var borderFactory = new FrameworkElementFactory(typeof(Border), "ImageBaseBorder");
+            borderFactory.SetValue(NameProperty, "ImageBaseBorder");
+            borderFactory.SetValue(VerticalAlignmentProperty, VerticalAlignment.Top);
+            borderFactory.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Left);
+            borderFactory.SetValue(WidthProperty, cardWidth);
+            borderFactory.SetValue(HeightProperty, cardHeight);
+            borderFactory.SetValue(BorderThicknessProperty, new Thickness(0));
+            borderFactory.SetValue(BackgroundProperty, new SolidColorBrush(Colors.White));
+            var gridFactory = new FrameworkElementFactory(typeof(Grid));
+
+            var cardFactory = new FrameworkElementFactory(typeof(Image), "CardImage");
+            cardFactory.SetValue(NameProperty, "CardImage");
+            cardFactory.SetValue(Image.SourceProperty, i);
+            cardFactory.SetValue(WidthProperty, cardWidth);
+            cardFactory.SetValue(HeightProperty, cardHeight);
+            cardFactory.SetValue(IsHitTestVisibleProperty, false);
+            gridFactory.AppendChild(cardFactory);
+            var testImageFactory = new FrameworkElementFactory(typeof(Image), "TestImage");
+            testImageFactory.SetValue(Image.SourceProperty, new BitmapImage(new Uri(png, UriKind.Relative)));
+            testImageFactory.SetValue(NameProperty, "TestImage");
+
+            testImageFactory.SetValue(IsHitTestVisibleProperty, false);
+            gridFactory.AppendChild(testImageFactory);
+            borderFactory.AppendChild(gridFactory);
+            cardTemplate.VisualTree = borderFactory;
+            return cardTemplate;
+        }
+
+        public void CreateCardElement(ImageSource imageSource)
+        {
+            this.Template = CardFactory(imageSource);
+            CardThumb.ApplyTemplate();
+            CardBorder = CardThumb.Template.FindName("ImageBaseBorder", this) as Border;
+            CardImage = CardThumb.Template.FindName("CardImage", this) as Image;
+            TestImage = CardThumb.Template.FindName("TestImage", this) as Image;
+            TestImage.SetBinding(VisibilityProperty, "TestPictVisible");
+        }
+
+        public void SetText(string text)
+        {
+            RecognizedText = text;
+        }
+
+        private void Card_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            EditRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void Card_DragStarted(object sender, DragStartedEventArgs e)
+        {
+            OnCardSelected();
+        }
+
+        private void Card_ManipulationStarting(object sender, ManipulationStartingEventArgs e)
+        {
+            e.Mode = ManipulationModes.Translate;
+            e.ManipulationContainer = mainWindow;
+            e.IsSingleTouchEnabled = true;
+            e.Handled = true;
+
+        }
+
+        private void Card_ManipulationStarted(object sender, ManipulationStartedEventArgs e)
+        {
+
+            OnCardSelected();
+            e.Handled = true;
+        }
+
+        private void Card_DragCompleted(object sender, DragCompletedEventArgs e)
+        {
+            if (e.VerticalChange == 0 && e.HorizontalChange == 0)
+            {
+                OnCardClicked();
+                e.Handled = true;
+            }
+            else OnCardDragCompleated();
+        }
+
+        private void Card_ManipulationCompleted(object sender, ManipulationCompletedEventArgs e)
+        {
+
+            if (e.TotalManipulation.Translation.X == 0 && e.TotalManipulation.Translation.Y == 0)
+            {
+                OnCardClicked();
+                e.Handled = true;
+            }
+            else OnCardDragCompleated();
+        }
+
+        private void Card_ManipulationDelta(object sender, ManipulationDeltaEventArgs e)
+        {
+            var scale = mainWindow.MainCanvasTransform.Matrix;
+            var p = new Point(x: e.DeltaManipulation.Translation.X / scale.M11, y:e.DeltaManipulation.Translation.Y / scale.M11);
+            Card_Delta(sender, p);
+            e.Handled = true;
+        }
+
+        // カード : ドラッグイベント内容（キャンバスサイズの調整）
+        public void Card_DragDelta(object sender, DragDeltaEventArgs e)
+        {
+            var p = new Point(x:e.HorizontalChange, y:e.VerticalChange);
+            Card_Delta(sender, p);
+            e.Handled = true;
+
+        }
+
+        public void Card_Delta(object sender, Point p)
+        {
+            this.Left += p.X;
+            this.Top += p.Y;
+
+            Canvas.SetLeft(this, Left);
+            Canvas.SetTop(this, Top);
+
+            OnCardDraging(sender, new DragDeltaEventArgs(p.X, p.Y));
+
+        }
+
+        private void MenuItemEdit_Click(object sender, RoutedEventArgs e)
+        {
+            EditRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void MenuItemDelete_Click(object sender, RoutedEventArgs e)
+        {
+            DeleteRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void Card_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+        {
+            if (ContextMenu == null) return;
+
+            // Use placement offsets based on current mouse position relative to the Card.
+            // For pen press-and-hold, WPF typically updates the mouse position as well.
+            var p = Mouse.GetPosition(this);
+
+            ContextMenu.PlacementTarget = this;
+            ContextMenu.Placement = PlacementMode.RelativePoint;
+            ContextMenu.HorizontalOffset = p.X;
+            ContextMenu.VerticalOffset = p.Y;
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+        }
+
+        public void OnCardDraging(object sender,DragDeltaEventArgs e)
+        {
+            CardDraging?.Invoke(this, e);
+        }
+
+        public void OnCardSelected()
+        {
+            CardSelected?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void OnCardClicked()
+        {
+            CardClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void OnCardDragCompleated()
+        {
+            CardDragCompleated?.Invoke(this, EventArgs.Empty);
+        }
+
+    }
+}

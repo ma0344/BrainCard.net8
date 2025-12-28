@@ -1,0 +1,26 @@
+﻿<Thumb x:Class="BrainCard.Card"
+       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+       xmlns:xamlhost="clr-namespace:Microsoft.Toolkit.Wpf.UI.XamlHost;assembly=Microsoft.Toolkit.Wpf.UI.XamlHost"
+       xmlns:local="clr-namespace:BrainCard"
+       mc:Ignorable="d"
+       d:DesignHeight="279"
+       d:DesignWidth="395"
+       Background="White"
+       IsHitTestVisible="True"
+       IsManipulationEnabled="True"
+       BorderBrush="Black"
+       BorderThickness="1"
+       Margin="0"
+       x:Name="CardThumb">
+    <Thumb.Effect>
+        <DropShadowEffect x:Name = "ThumbShadow"
+                          BlurRadius="16"
+                          ShadowDepth="3"
+                          Direction="315"
+                          Color="Black"
+                          Opacity="0.2" />
+    </Thumb.Effect>
+</Thumb>

@@ -1,0 +1,41 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+    <sys:String x:Key="BackButtonContent">背面へ</sys:String>
+    <sys:String x:Key="BlurRadiusSliderHeader">ぼかし半径</sys:String>
+    <sys:String x:Key="ClearButtonContent">カードクリア</sys:String>
+    <sys:String x:Key="ColorPickerButtonHeader">背景色</sys:String>
+    <sys:String x:Key="ContextMenuDeleteHeader">削除</sys:String>
+    <sys:String x:Key="ContextMenuEditHeader">編集</sys:String>
+    <sys:String x:Key="DebugModeSwitchHeader">デバッグモード</sys:String>
+    <sys:String x:Key="DebugModeSwitchOffContent">OFF</sys:String>
+    <sys:String x:Key="DebugModeSwitchOnContent">ON</sys:String>
+    <sys:String x:Key="DirectionSliderHeader">角度</sys:String>
+    <sys:String x:Key="EffectExpanderHeader">カードエフェクト</sys:String>
+    <sys:String x:Key="FrontButtonContent">前面へ</sys:String>
+    <sys:String x:Key="InputWindowToggleSwitchHeader">入力ウインドウ表示</sys:String>
+    <sys:String x:Key="InputWindowToggleSwitchOffContent">非表示</sys:String>
+    <sys:String x:Key="InputWindowToggleSwitchOnContent">表示</sys:String>
+    <sys:String x:Key="LanguageSelectorHeader">表示言語</sys:String>
+    <sys:String x:Key="LoadButtonContent">読込</sys:String>
+    <sys:String x:Key="OpacitySliderHeader">透明度</sys:String>
+    <sys:String x:Key="OptionExpanderHeader">その他のオプション</sys:String>
+    <sys:String x:Key="OverWriteMenuContent">上書き保存</sys:String>
+    <sys:String x:Key="PinButtonContent">常に表示</sys:String>
+    <sys:String x:Key="SaveAsMenuContent">新規保存</sys:String>
+    <sys:String x:Key="SaveButtonContent">保存</sys:String>
+    <sys:String x:Key="ScaleSliderHeader">ズーム</sys:String>
+    <sys:String x:Key="SelectedCardShowTopToggleSwitchHeader">選択時最前面</sys:String>
+    <sys:String x:Key="SelectedCardShowTopToggleSwitchOnContent">ON</sys:String>
+    <sys:String x:Key="SelectedCardShowTopToggleSwitchOffContent">OFF</sys:String>
+    <sys:String x:Key="ShadowColorPickerButtonHeader">境界色</sys:String>
+    <sys:String x:Key="ShadowDepthSliderHeader">影深度</sys:String>
+    <sys:String x:Key="ShadowToggleSwitchHeader">選択カードエフェクト</sys:String>
+    <sys:String x:Key="ShadowToggleSwitchOffContent">シンプル</sys:String>
+    <sys:String x:Key="ShadowToggleSwitchOnContent">カラーシャドウ</sys:String>
+    <sys:String x:Key="ThemeToggleSwitchHeader">テーマ</sys:String>
+    <sys:String x:Key="ThemeToggleSwitchOffContent">Light</sys:String>
+    <sys:String x:Key="ThemeToggleSwitchOnContent">Dark</sys:String>
+    <sys:String x:Key="LoadingMessage">ロード中…</sys:String>
+</ResourceDictionary>
+

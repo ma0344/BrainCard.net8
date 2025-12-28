@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "dgSpecHash": "aLIPBLaMMSQ=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\ma\\source\\repos\\BrainCard\\BrainCard.WinUI\\BrainCard.WinUI.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.web.webview2\\1.0.2651.64\\microsoft.web.webview2.1.0.2651.64.nupkg.sha512",
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.windows.sdk.buildtools\\10.0.22621.756\\microsoft.windows.sdk.buildtools.10.0.22621.756.nupkg.sha512",
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.windowsappsdk\\1.6.250205002\\microsoft.windowsappsdk.1.6.250205002.nupkg.sha512",
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x86\\8.0.22\\microsoft.netcore.app.runtime.win-x86.8.0.22.nupkg.sha512",
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.19041.57\\microsoft.windows.sdk.net.ref.10.0.19041.57.nupkg.sha512",
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x86\\8.0.22\\microsoft.aspnetcore.app.runtime.win-x86.8.0.22.nupkg.sha512",
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.netcore.app.runtime.win-arm64\\8.0.22\\microsoft.netcore.app.runtime.win-arm64.8.0.22.nupkg.sha512",
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.22\\microsoft.aspnetcore.app.runtime.win-x64.8.0.22.nupkg.sha512",
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-arm64\\8.0.22\\microsoft.windowsdesktop.app.runtime.win-arm64.8.0.22.nupkg.sha512",
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.22\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.22.nupkg.sha512",
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-arm64\\8.0.22\\microsoft.aspnetcore.app.runtime.win-arm64.8.0.22.nupkg.sha512",
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.22\\microsoft.netcore.app.runtime.win-x64.8.0.22.nupkg.sha512",
+    "C:\\Users\\ma\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x86\\8.0.22\\microsoft.windowsdesktop.app.runtime.win-x86.8.0.22.nupkg.sha512"
+  ],
+  "logs": [
+    {
+      "code": "NU1603",
+      "level": "Warning",
+      "message": "BrainCard.WinUI は Microsoft.WindowsAppSDK (>= 1.6.250205000) に依存しますが、Microsoft.WindowsAppSDK 1.6.250205000 が見つかりませんでした。代わりに Microsoft.WindowsAppSDK 1.6.250205002 が解決されました。",
+      "projectPath": "C:\\Users\\ma\\source\\repos\\BrainCard\\BrainCard.WinUI\\BrainCard.WinUI.csproj",
+      "warningLevel": 1,
+      "filePath": "C:\\Users\\ma\\source\\repos\\BrainCard\\BrainCard.WinUI\\BrainCard.WinUI.csproj",
+      "libraryId": "Microsoft.WindowsAppSDK",
+      "targetGraphs": [
+        "net8.0-windows10.0.19041",
+        "net8.0-windows10.0.19041/win-arm64",
+        "net8.0-windows10.0.19041/win-x64",
+        "net8.0-windows10.0.19041/win-x86"
+      ]
+    }
+  ]
+}

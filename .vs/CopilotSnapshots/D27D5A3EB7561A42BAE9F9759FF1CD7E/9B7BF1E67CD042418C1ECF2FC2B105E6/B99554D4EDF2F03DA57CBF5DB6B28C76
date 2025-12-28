@@ -1,0 +1,153 @@
+﻿using System;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Interop;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Hosting;
+
+namespace BrainCard.WinUIHost;
+
+public sealed class WinUIHostControl : ContentControl, IDisposable
+{
+    private DesktopWindowXamlSource? _xamlSource;
+    private IntPtr _hwndXamlIsland;
+
+    static WinUIHostControl()
+    {
+        DefaultStyleKeyProperty.OverrideMetadata(typeof(WinUIHostControl), new FrameworkPropertyMetadata(typeof(WinUIHostControl)));
+    }
+
+    public UIElement? WinUIContent
+    {
+        get => (UIElement?)GetValue(WinUIContentProperty);
+        set => SetValue(WinUIContentProperty, value);
+    }
+
+    public static readonly DependencyProperty WinUIContentProperty =
+        DependencyProperty.Register(nameof(WinUIContent), typeof(UIElement), typeof(WinUIHostControl),
+            new PropertyMetadata(null, OnWinUIContentChanged));
+
+    private static void OnWinUIContentChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is WinUIHostControl host)
+        {
+            host.AttachContent(e.NewValue as UIElement);
+        }
+    }
+
+    public override void OnApplyTemplate()
+    {
+        base.OnApplyTemplate();
+        EnsureIsland();
+    }
+
+    protected override void OnVisualParentChanged(DependencyObject oldParent)
+    {
+        base.OnVisualParentChanged(oldParent);
+
+        if (oldParent != null && VisualParent == null)
+        {
+            Dispose();
+        }
+    }
+
+    private void EnsureIsland()
+    {
+        if (_xamlSource != null)
+            return;
+
+        var window = Window.GetWindow(this);
+        if (window == null)
+            return;
+
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero)
+            return;
+
+        _xamlSource = new DesktopWindowXamlSource();
+        var interop = (IDesktopWindowXamlSourceNative)_xamlSource;
+        interop.AttachToWindow(hwnd);
+        interop.get_WindowHandle(out _hwndXamlIsland);
+
+        if (_hwndXamlIsland != IntPtr.Zero)
+        {
+            // Make the island a child of our HwndHost-like container by parenting it under our window.
+            // We still need to position/size it; do that on arrange.
+            SetWindowPos(_hwndXamlIsland, IntPtr.Zero, 0, 0, (int)ActualWidth, (int)ActualHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+
+        AttachContent(WinUIContent);
+    }
+
+    private void AttachContent(UIElement? content)
+    {
+        if (_xamlSource == null)
+            return;
+
+        _xamlSource.Content = content;
+    }
+
+    protected override Size ArrangeOverride(Size arrangeBounds)
+    {
+        var size = base.ArrangeOverride(arrangeBounds);
+
+        EnsureIsland();
+
+        if (_hwndXamlIsland != IntPtr.Zero)
+        {
+            // Translate WPF coordinates into the host window client coordinates.
+            var window = Window.GetWindow(this);
+            if (window != null)
+            {
+                var origin = TranslatePoint(new Point(0, 0), window);
+                var dpi = VisualTreeHelper.GetDpi(window);
+
+                var x = (int)(origin.X * dpi.DpiScaleX);
+                var y = (int)(origin.Y * dpi.DpiScaleY);
+                var w = (int)(arrangeBounds.Width * dpi.DpiScaleX);
+                var h = (int)(arrangeBounds.Height * dpi.DpiScaleY);
+
+                SetWindowPos(_hwndXamlIsland, IntPtr.Zero, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+        }
+
+        return size;
+    }
+
+    public void Dispose()
+    {
+        if (_xamlSource != null)
+        {
+            try
+            {
+                _xamlSource.Content = null;
+                _xamlSource.Dispose();
+            }
+            catch
+            {
+                // ignore
+            }
+            finally
+            {
+                _xamlSource = null;
+                _hwndXamlIsland = IntPtr.Zero;
+            }
+        }
+    }
+
+    private const uint SWP_NOZORDER = 0x0004;
+    private const uint SWP_NOACTIVATE = 0x0010;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    [ComImport]
+    [Guid("3CBCF1BF-2F76-4E9C-96AB-E84B37972554")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IDesktopWindowXamlSourceNative
+    {
+        void AttachToWindow(IntPtr parentWnd);
+        void get_WindowHandle(out IntPtr hwnd);
+    }
+}

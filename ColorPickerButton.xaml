@@ -1,0 +1,128 @@
+﻿<UserControl x:Class="BrainCard.ColorPickerButton"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:BrainCard"
+             mc:Ignorable="d"
+             d:DesignHeight="30"
+             d:DesignWidth="65"
+             xmlns:ui="http://schemas.modernwpf.com/2019">
+    <Grid>
+        <ui:SplitButton x:Name="PenColorButton"
+                        AutomationProperties.Name="Font color"
+                        Padding="0"
+                        MinHeight="0"
+                        MinWidth="0"
+                        VerticalAlignment="Top">
+            <Rectangle x:Name="CurrentColorRect"
+                       Width="32"
+                       Height="32"
+                       Fill="Black"
+                       Margin="0" />
+            <ui:SplitButton.Flyout>
+                <ui:Flyout x:Name="ColoPickerFlyout"
+                           Placement="BottomEdgeAlignedLeft">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition />
+                            <RowDefinition />
+                        </Grid.RowDefinitions>
+                        <UniformGrid Grid.Row="0"
+                                     VerticalAlignment="Top"
+                                     Margin="0"
+                                     Rows="5"
+                                     Columns="6">
+                            <UniformGrid.Resources>
+                                <Style TargetType="Rectangle">
+                                    <Setter Property="Width"
+                                            Value="32" />
+                                    <Setter Property="Height"
+                                            Value="32" />
+                                </Style>
+                                <Style TargetType="ToggleButton"
+                                       BasedOn="{StaticResource DefaultButtonStyle}">
+                                    <Setter Property="Width"
+                                            Value="35" />
+                                    <Setter Property="Height"
+                                            Value="35" />
+                                    <Setter Property="Padding"
+                                            Value="0" />
+                                    <Setter Property="MinWidth"
+                                            Value="0" />
+                                    <Setter Property="MinHeight"
+                                            Value="0" />
+                                    <Setter Property="Margin"
+                                            Value="30" />
+                                </Style>
+                            </UniformGrid.Resources>
+                            
+                            <local:ColorButton Color="Black"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="White"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#d0d2d3"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#a6a7ab"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#7f8184"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#59595b"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#b21c64"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#e52121"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#ff5600"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#ffa900"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#ffcd00"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#ffe500"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#a1e521"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#2ae500"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#007f56"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#00a8cb"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#014ee5"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#3f00b7"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#6600cb"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#60007f"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#f7d6c3"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#ba9067"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#8d5732"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#613f33"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#ff7fff"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#ffc57f"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#ffff7f"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#7fff9d"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#7fd5ff"
+                                               Click="ColorButton_Click" />
+                            <local:ColorButton Color="#bbb1ff"
+                                               Click="ColorButton_Click" />
+                        </UniformGrid>
+
+                    </Grid>
+
+                </ui:Flyout>
+            </ui:SplitButton.Flyout>
+        </ui:SplitButton>
+    </Grid>
+</UserControl>
