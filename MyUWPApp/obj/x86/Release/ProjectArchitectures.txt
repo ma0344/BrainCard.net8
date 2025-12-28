@@ -1,1 +1,0 @@
-C:\Users\ma\source\repos\BrainCard\MyUWPApp\MyUWPApp.csproj;x86

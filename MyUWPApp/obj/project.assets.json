@@ -10491,11 +10491,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\ma\\source\\repos\\BrainCard\\MyUWPApp\\MyUWPApp.csproj",
+      "projectUniqueName": "C:\\Users\\ma\\source\\repos\\BrainCard.net8\\MyUWPApp\\MyUWPApp.csproj",
       "projectName": "MyUWPApp",
-      "projectPath": "C:\\Users\\ma\\source\\repos\\BrainCard\\MyUWPApp\\MyUWPApp.csproj",
+      "projectPath": "C:\\Users\\ma\\source\\repos\\BrainCard.net8\\MyUWPApp\\MyUWPApp.csproj",
       "packagesPath": "C:\\Users\\ma\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\ma\\source\\repos\\BrainCard\\MyUWPApp\\obj\\",
+      "outputPath": "C:\\Users\\ma\\source\\repos\\BrainCard.net8\\MyUWPApp\\obj\\",
       "projectStyle": "PackageReference",
       "skipContentFileWrite": true,
       "UsingMicrosoftNETSdk": false,
