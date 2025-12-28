@@ -1,2 +1,0 @@
-MainPackage=C:\Users\ma\source\repos\BrainCard\MyUWPApp\bin\x86\Release\MyUWPApp_1.0.0.0_x86.msix
-SymbolPackage=C:\Users\ma\source\repos\BrainCard\MyUWPApp\obj\x86\Release\Symbols\MyUWPApp_1.0.0.0_x86.appxsym
