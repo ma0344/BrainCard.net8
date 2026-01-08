@@ -1,6 +1,4 @@
-﻿using Microsoft.Toolkit.Wpf.UI.XamlHost;
-using MyUWPApp;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -17,9 +15,14 @@ using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using static BrainCard.Values;
+
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
+using Microsoft.Toolkit.Wpf.UI.XamlHost;
+using MyUWPApp;
 using Windows.Graphics.Imaging;
 using Windows.UI.Input.Inking;
-using static BrainCard.Values;
+#endif
 
 namespace BrainCard
 {
@@ -38,9 +41,16 @@ namespace BrainCard
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
 
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
         public CustomInkCanvas CardInkCanvas;
         public Windows.UI.Xaml.Controls.InkCanvas CardCanvas { get; set; }
         public Windows.UI.Input.Inking.InkPresenter CardPresenter { get; set; }
+#else
+        public object CardInkCanvas;
+        public object CardCanvas { get; set; }
+        public object CardPresenter { get; set; }
+#endif
+
         public Border CardBorder;
         public Image CardImage;
         public Image TestImage;
@@ -145,7 +155,11 @@ namespace BrainCard
         }
 
 
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
         public Card(MainWindow window, CustomInkCanvas inkCanvas, ImageSource imageSource)
+#else
+        public Card(MainWindow window, object inkCanvas, ImageSource imageSource)
+#endif
         {
             InitializeComponent();
             this.Name += "_" + Guid.NewGuid().ToString().Replace("-", "");
@@ -156,6 +170,7 @@ namespace BrainCard
             Stylus.SetIsPressAndHoldEnabled(this, true);
             Stylus.SetIsFlicksEnabled(this, false);
 
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
             // Create a new canvas for this card, but copy only stroke data (avoid cloning UI trees).
             CardInkCanvas = new CustomInkCanvas(Writable: false);
             InkStrokeContainer strokeContainer = inkCanvas.CloneStrokeContainer();
@@ -166,6 +181,13 @@ namespace BrainCard
 
             CardCanvas = CardInkCanvas.InnerInkCanvas;
             CardPresenter = CardCanvas.InkPresenter;
+#else
+            // XAML Islands disabled: keep UI functional (cards/images) but without ink canvas.
+            CardInkCanvas = null;
+            CardCanvas = null;
+            CardPresenter = null;
+#endif
+
             CreateCardElement(imageSource);
 
             var contextMenu = new ContextMenu { DataContext = window.DataContext };
@@ -193,6 +215,7 @@ namespace BrainCard
             this.MouseDoubleClick += Card_MouseDoubleClick;
         }
 
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
         public Windows.UI.Xaml.Controls.InkCanvas InkCanvasClone()
         {
             var ClonedCanvas = new Windows.UI.Xaml.Controls.InkCanvas
@@ -222,7 +245,11 @@ namespace BrainCard
             }
 
         }
-
+#else
+        public object InkCanvasClone() => null;
+        public void InkPresenterClone(object _) { }
+        public void SetInkCanvas(object _) { }
+#endif
 
         public ControlTemplate CardFactory(ImageSource i)
         {

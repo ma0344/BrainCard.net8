@@ -5,8 +5,6 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:BrainCard"
         xmlns:ui="http://schemas.modernwpf.com/2019"
-        xmlns:controls="clr-namespace:Microsoft.Toolkit.Wpf.UI.Controls;assembly=Microsoft.Toolkit.Wpf.UI.Controls"
-        xmlns:xaml="clr-namespace:Microsoft.Toolkit.Wpf.UI.XamlHost;assembly=Microsoft.Toolkit.Wpf.UI.XamlHost"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         mc:Ignorable="d"
         ui:WindowHelper.UseModernWindowStyle="True"
@@ -151,12 +149,10 @@
                                           PaneOpening="SplitView_PaneOpening"
                                           PaneClosed="SplitView_PaneClosed">
                                 <ui:SplitView.Pane>
-                                    <xaml:WindowsXamlHost x:Name="CardInkToolbarHost"
-                                                          Grid.Column="1"
-                                                          Width="200"
-                                                          HorizontalAlignment="Left"
-                                                          InitialTypeName="MyUWPApp.CustomInkToolbar"
-                                                          ChildChanged="CardInkToolbarHost_ChildChanged" />
+                                    <!-- XAML Islands disabled on .NET 8 build (Toolkit XamlHost not referenced). -->
+                                    <Border Width="200" Background="Transparent">
+                                        <TextBlock Margin="8" Text="Ink toolbar is unavailable in this build." />
+                                    </Border>
                                 </ui:SplitView.Pane>
 
                             </ui:SplitView>

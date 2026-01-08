@@ -25,6 +25,7 @@ using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Windows.Storage.Streams;
+using Windows.UI.Input.Inking;
 using System.Runtime.CompilerServices;
 using Windows.UI.Input.Inking;
 using static BrainCard.Values;
@@ -52,7 +53,6 @@ namespace BrainCard
         private double lastImagePositionTop = 10;
         private int currentZIndex = 0;
         public int selectedCardZIndex;
-
         private bool cardCanvasToggleSwitchLastState_IsOn;
         public Point originalSubWindowPos;
         private Point _dragStartPoint;

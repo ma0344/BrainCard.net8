@@ -20,18 +20,20 @@ using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
 using System.Windows.Shapes;
 using System.Windows.Shell;
-using Microsoft.Toolkit.Wpf.UI.Controls;
-using Microsoft.Toolkit.Wpf.UI.XamlHost;
 using ModernWpf;
 using ModernWpf.Controls;
+using static BrainCard.Values;
+using forms = System.Windows.Forms;
+
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
+using Microsoft.Toolkit.Wpf.UI.XamlHost;
 using MyUWPApp;
-using Windows.ApplicationModel.UserDataAccounts.SystemAccess;
 using Windows.Storage.Streams;
 using Windows.UI.Input.Inking;
 using Windows.UI.Input.Inking.Analysis;
 using Windows.UI.Xaml.Media.Imaging;
-using static BrainCard.Values;
-using forms = System.Windows.Forms;
+#endif
+
 namespace BrainCard
 {
 
@@ -96,6 +98,7 @@ namespace BrainCard
         public EventHandler WindowLoaded;
 
         private MainWindow mainWindow;
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
         public WindowsXamlHost CardInkCanvasHost;
         public Windows.UI.Xaml.Controls.InkCanvas cardInkCanvas;
         public Windows.UI.Xaml.Controls.Grid cardBaseGrid;
@@ -104,13 +107,25 @@ namespace BrainCard
         public CustomInkCanvas resizeInkCanvas;
         public WindowsXamlHost ResizeInkCanvasHost;
         public Windows.UI.Xaml.Controls.Image testPict;
+
+        private Windows.UI.Xaml.Hosting.WindowsXamlManager _windowsXamlManager;
+#else
+        // XAML Islands disabled: keep window code compiling.
+        public object CardInkCanvasHost;
+        public object cardInkCanvas;
+        public object cardBaseGrid;
+        public object customInkCanvas;
+        public object customInkToolbar;
+        public object resizeInkCanvas;
+        public object ResizeInkCanvasHost;
+        public object testPict;
+#endif
+
         private RECT prevPoint = new RECT();
         private WindowChrome windowChrome;
         private Border imageBaseBorder = new Border();
         private SplitView splitView;
         private ToggleButton inkToolbarToggleButton;
-
-        private Windows.UI.Xaml.Hosting.WindowsXamlManager _windowsXamlManager;
 
         public SubWindow(MainWindow main)
         {
@@ -135,6 +150,7 @@ namespace BrainCard
         {
             Debug.WriteLine($"[SubWindow] Closed: hash={GetHashCode()}, IsVisible={IsVisible}, Visibility={Visibility}");
 
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
             try
             {
                 _windowsXamlManager?.Dispose();
@@ -144,12 +160,18 @@ namespace BrainCard
             {
                 Debug.WriteLine($"[SubWindow] WindowsXamlManager.Dispose failed: {ex}");
             }
+#endif
         }
 
         private void SubWindow_Loaded(object sender, RoutedEventArgs e)
         {
             Debug.WriteLine($"[SubWindow] Loaded: hash={GetHashCode()}, IsVisible={IsVisible}, Visibility={Visibility}");
 
+#if BRAIN_CARD_DISABLE_XAML_ISLANDS
+            // XAML Islands disabled on .NET 8 build.
+            // The app can still run, but ink input UI is unavailable.
+            return;
+#else
             // Initialize XAML Islands for this thread once.
             _windowsXamlManager ??= Windows.UI.Xaml.Hosting.WindowsXamlManager.InitializeForCurrentThread();
 
@@ -160,6 +182,7 @@ namespace BrainCard
             customInkCanvas.VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Stretch;
             customInkCanvas.HorizontalAlignment = Windows.UI.Xaml.HorizontalAlignment.Stretch;
             customInkCanvas.Drawing += CustomInkCanvas_Drawing;
+
             CardInkCanvasHost = new WindowsXamlHost
             {
                 InitialTypeName = "MyUWPApp.CustomInkCanvas",
@@ -212,6 +235,7 @@ namespace BrainCard
             splitView = subwindow.Template.FindName("InkToolbarSplitView", subwindow) as SplitView;
             inkToolbarToggleButton = subwindow.Template.FindName("inkToolbarToggleButton", subwindow) as ToggleButton;
             OnWindowLoaded();
+#endif
         }
         private void CustomInkCanvas_Drawing(object sender, EventArgs e)
         {
@@ -260,8 +284,10 @@ namespace BrainCard
                     
                     if(!mainWindow.vm.IsInEditMode)
                         SetWindowPos(hwnd, IntPtr.Zero, rect.Left, rect.Top, width, height, 0);
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
                     this.cardInkCanvas.Width = cardWidth;
                     this.cardInkCanvas.Height = cardHeight;
+#endif
                     ContentRootGrid.Width = cardWidth;
                     ContentRootGrid.Height = cardHeight;
                     handled = true;
@@ -305,9 +331,11 @@ namespace BrainCard
             return IntPtr.Zero;
         }
 
-        // サイズ変更終了時に子コントロールのサイズを更新
         private void UpdateChildSizes(double windowWidth = double.NaN, double windowHeight = double.NaN)
         {
+#if BRAIN_CARD_DISABLE_XAML_ISLANDS
+            return;
+#else
             var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
             double clientWidth = ContentRootGrid.ActualWidth;
             double clientHeight = ContentRootGrid.ActualHeight;
@@ -352,13 +380,14 @@ namespace BrainCard
             cardInkCanvas.UpdateLayout();
             cardInkCanvas.InvalidateMeasure();
             //Debug.WriteLine($"Window {this.ActualWidth}, grid {CardCanvasGrid.ActualWidth}, Host {CardInkCanvasHost.ActualWidth}, inner {childCanvas.ActualWidth}, gap {widthGap}");
-
+#endif
         }
 
-        // サイズ変更終了時に子コントロールのサイズを更新
-        // SubWindow : Windowサイズの比率を維持する処理
         private void AdjustWindowSize(ref WINDOWPOS pos, int sizingEdge, double dpiScale)
         {
+#if BRAIN_CARD_DISABLE_XAML_ISLANDS
+            return;
+#else
             var childCanvas = CardInkCanvasHost.Child as MyUWPApp.CustomInkCanvas;
            
             if (sizingEdge != 0 && pos.cy != 0 && pos.cx != 0)
@@ -391,12 +420,15 @@ namespace BrainCard
             }
             pos.cx += 0;
             pos.cy += 0;
+#endif
         }
 
         // SubWindow : Keepボタンがクリックされたときの処理
         public async void ButtonKeep_Click(object sender, RoutedEventArgs e)
         {
-            
+#if BRAIN_CARD_DISABLE_XAML_ISLANDS
+            return;
+#else
             var fourgroundStrokes = cardInkCanvas.InkPresenter.StrokeContainer.GetStrokes();
             if (fourgroundStrokes.Count == 0)
             {
@@ -433,17 +465,25 @@ namespace BrainCard
             }
 
             CanvasClear();
+#endif
         }
 
         public ImageSource CaputureCanvas()
         {
+#if BRAIN_CARD_DISABLE_XAML_ISLANDS
+            return null;
+#else
             var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap((int)cardInkCanvas.ActualWidth, (int)cardInkCanvas.ActualHeight, 96, 96, PixelFormats.Pbgra32);
             rtb.Render(CardCanvasGrid);
             return rtb;
+#endif
         }
 
         public async Task<System.Windows.Media.ImageSource> CaputureCanvasAsync()
         {
+#if BRAIN_CARD_DISABLE_XAML_ISLANDS
+            return null;
+#else
             resizeInkCanvas.SetInnerCanvas(this.customInkCanvas.InnerInkCanvas);
             resizeInkCanvas.UpdateLayout();
 
@@ -462,8 +502,10 @@ namespace BrainCard
             wb.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
             wb.Unlock();
             return wb;
+#endif
         }
 
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
         private async Task<string> RecognizeInk(InkStrokeContainer strokeContainer)
         {
             if (strokeContainer.GetStrokes().Count() <= 0) return "";
@@ -472,10 +514,15 @@ namespace BrainCard
             var recognizedText = recognitionResults.Select(x => x.GetTextCandidates().First()).Aggregate((current, next) => current + " " + next);
             return recognizedText;
         }
+#endif
 
         public void setEditCanvas(Card card)
         {
+#if BRAIN_CARD_DISABLE_XAML_ISLANDS
+            return;
+#else
             this.customInkCanvas.SetInnerCanvas(card.CardCanvas);
+#endif
         }
 
         private void ClearButton_Click(object sender, RoutedEventArgs e)
@@ -497,7 +544,11 @@ namespace BrainCard
         // SubWindow : キャンバスの初期化
         public void CanvasClear()
         {
+#if BRAIN_CARD_DISABLE_XAML_ISLANDS
+            return;
+#else
             cardInkCanvas.InkPresenter.StrokeContainer.Clear();
+#endif
         }
 
         // SubWindow : タイトルバーでウィンドウをドラッグ移動する
@@ -517,6 +568,7 @@ namespace BrainCard
 
         }
 
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
         private void CardInkToolbarHost_ChildChanged(object sender, EventArgs e)
         {
             WindowsXamlHost windowsXamlHost = sender as WindowsXamlHost;
@@ -527,6 +579,7 @@ namespace BrainCard
                 customInkToolbar.InnerInkToolbar.TargetInkCanvas = customInkCanvas.InnerInkCanvas;
             }
         }
+#endif
 
         private void ToggleButton_Checked(object sender, RoutedEventArgs e)
         {

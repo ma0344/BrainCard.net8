@@ -1,17 +1,21 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
-    <UseWPF>True</UseWPF>
-    <Platforms>AnyCPU;x64;x86</Platforms>
-	<AssetTargetFallback>uap10.0.19041</AssetTargetFallback>
-	  <StartupObject>BrainCard.Program</StartupObject>
-	<UseWindowsForms>True</UseWindowsForms>
-	  <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
-	  <SatelliteResourceLanguages>ja</SatelliteResourceLanguages>
-	  <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-  </PropertyGroup>
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+		<UseWPF>True</UseWPF>
+		<Platforms>AnyCPU;x64;x86</Platforms>
+		<AssetTargetFallback>uap10.0.19041</AssetTargetFallback>
+		<StartupObject>BrainCard.Program</StartupObject>
+		<UseWindowsForms>True</UseWindowsForms>
+		<ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
+
+		<SatelliteResourceLanguages>ja</SatelliteResourceLanguages>
+		<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
+		<SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+		<DefineConstants>$(DefineConstants);BRAIN_CARD_DISABLE_XAML_ISLANDS</DefineConstants>
+	</PropertyGroup>
 
   <ItemGroup>
     <Compile Remove="BrainCard.WinUI\**" />
@@ -75,7 +79,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Toolkit.Wpf.UI.Controls" Version="6.1.2" />
     <PackageReference Include="ModernWpfUI" Version="0.9.6" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
