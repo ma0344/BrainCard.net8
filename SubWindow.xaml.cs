@@ -1,48 +1,30 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.DirectoryServices.ActiveDirectory;
-using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.WindowsRuntime;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
-using System.Windows.Media.Media3D;
 using System.Windows.Shapes;
 using System.Windows.Shell;
-using ModernWpf;
+using BrainCard.Models.FileFormatV2;
 using ModernWpf.Controls;
 using static BrainCard.Values;
 using forms = System.Windows.Forms;
-
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
-using Microsoft.Toolkit.Wpf.UI.XamlHost;
-using MyUWPApp;
-using Windows.Storage.Streams;
-using Windows.UI.Input.Inking;
-using Windows.UI.Input.Inking.Analysis;
-using Windows.UI.Xaml.Media.Imaging;
-#endif
+using BrainCard.Overlay;
 
 namespace BrainCard
 {
-
     /// <summary>
     /// SubWindow.xaml の相互作用ロジック
     /// </summary>
     public partial class SubWindow : Window
     {
-        // WINDOWPOS構造体の定義
         [StructLayout(LayoutKind.Sequential)]
         private struct WINDOWPOS
         {
@@ -55,12 +37,10 @@ namespace BrainCard
             public int flags;
         }
 
-        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+        [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
-
-        // RECT 構造体の定義
-        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        [StructLayout(LayoutKind.Sequential)]
         private struct RECT
         {
             public int Left;
@@ -75,7 +55,6 @@ namespace BrainCard
         private double windowTop = 100;
         private double windowLeft = 100;
 
-        // サイズ変更エッジの定数
         private const int WMSZ_LEFT = 1;
         private const int WMSZ_RIGHT = 2;
         private const int WMSZ_TOP = 3;
@@ -85,7 +64,6 @@ namespace BrainCard
         private const int WMSZ_BOTTOMLEFT = 7;
         private const int WMSZ_BOTTOMRIGHT = 8;
 
-        // メッセージ定数
         private const int WM_SIZING = 0x0214;
         private const int WM_WINDOWPOSCHANGING = 0x0046;
         private const int WM_SHOWWINDOW = 0x0018;
@@ -93,24 +71,12 @@ namespace BrainCard
         private const int WM_SYSCOMMAND = 0x0112;
         private const int SC_MINIMIZE = 0xF020;
 
-
         public forms.Screen currentScreen;
         public EventHandler WindowLoaded;
 
-        private MainWindow mainWindow;
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
-        public WindowsXamlHost CardInkCanvasHost;
-        public Windows.UI.Xaml.Controls.InkCanvas cardInkCanvas;
-        public Windows.UI.Xaml.Controls.Grid cardBaseGrid;
-        public CustomInkCanvas customInkCanvas;
-        public CustomInkToolbar customInkToolbar;
-        public CustomInkCanvas resizeInkCanvas;
-        public WindowsXamlHost ResizeInkCanvasHost;
-        public Windows.UI.Xaml.Controls.Image testPict;
+        private readonly MainWindow mainWindow;
 
-        private Windows.UI.Xaml.Hosting.WindowsXamlManager _windowsXamlManager;
-#else
-        // XAML Islands disabled: keep window code compiling.
+        // 旧XAML Islands公開フィールド互換（当面MainWindow側の整理が終わるまで保持）
         public object CardInkCanvasHost;
         public object cardInkCanvas;
         public object cardBaseGrid;
@@ -119,131 +85,105 @@ namespace BrainCard
         public object resizeInkCanvas;
         public object ResizeInkCanvasHost;
         public object testPict;
-#endif
 
         private RECT prevPoint = new RECT();
         private WindowChrome windowChrome;
-        private Border imageBaseBorder = new Border();
         private SplitView splitView;
         private ToggleButton inkToolbarToggleButton;
+
+        private bool _isCollecting;
+        private readonly List<Point> _currentStroke = new();
+        private readonly List<List<Point>> _strokes = new();
+
+        private const string DefaultStrokeColor = "#FF000000";
+        private const double DefaultStrokeSizeDip = 2.0;
+        private const double DefaultStrokePressure = 0.5;
+
+        private readonly List<Bcf2Stroke> _v2Strokes = new();
+
+        private StrokeOverlayWindow _strokeOverlayWindow;
+
+        private bool _overlaySyncQueued;
 
         public SubWindow(MainWindow main)
         {
             InitializeComponent();
             mainWindow = main;
-            windowChrome = this.chrome;
-            this.Loaded += SubWindow_Loaded;
-            this.Unloaded += SubWindow_Unloaded;
-            this.Closed += SubWindow_Closed;
-            Canvas.SetLeft(CardCanvasGrid, 0);
-            Canvas.SetTop(CardCanvasGrid, 0);
-            this.SourceInitialized += SubWindow_SourceInitialized;
-            
+            windowChrome = chrome;
+
+            Loaded += SubWindow_Loaded;
+            Unloaded += SubWindow_Unloaded;
+            Closed += SubWindow_Closed;
+
+            LocationChanged += (_, __) => SyncOverlayWindowBounds();
+            SizeChanged += (_, __) =>
+            {
+                SyncOverlayWindowBounds();
+                QueueOverlaySync();
+            };
+            IsVisibleChanged += (_, __) =>
+            {
+                if (_strokeOverlayWindow != null)
+                {
+                    _strokeOverlayWindow.Visibility = IsVisible ? Visibility.Visible : Visibility.Hidden;
+                }
+            };
+
+            Canvas.SetLeft(ContentRootGrid, 0);
+            Canvas.SetTop(ContentRootGrid, 0);
+
+            SourceInitialized += SubWindow_SourceInitialized;
+
+            DxHost.PointerDown += DxHost_PointerDown;
+            DxHost.PointerMove += DxHost_PointerMove;
+            DxHost.PointerUp += DxHost_PointerUp;
         }
 
         private void SubWindow_Unloaded(object sender, RoutedEventArgs e)
         {
             Debug.WriteLine($"[SubWindow] Unloaded: hash={GetHashCode()}, IsVisible={IsVisible}, Visibility={Visibility}");
+            CloseStrokeOverlayWindow();
         }
 
         private void SubWindow_Closed(object sender, EventArgs e)
         {
             Debug.WriteLine($"[SubWindow] Closed: hash={GetHashCode()}, IsVisible={IsVisible}, Visibility={Visibility}");
-
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
-            try
-            {
-                _windowsXamlManager?.Dispose();
-                _windowsXamlManager = null;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[SubWindow] WindowsXamlManager.Dispose failed: {ex}");
-            }
-#endif
+            CloseStrokeOverlayWindow();
         }
 
         private void SubWindow_Loaded(object sender, RoutedEventArgs e)
         {
             Debug.WriteLine($"[SubWindow] Loaded: hash={GetHashCode()}, IsVisible={IsVisible}, Visibility={Visibility}");
 
-#if BRAIN_CARD_DISABLE_XAML_ISLANDS
-            // XAML Islands disabled on .NET 8 build.
-            // The app can still run, but ink input UI is unavailable.
-            return;
-#else
-            // Initialize XAML Islands for this thread once.
-            _windowsXamlManager ??= Windows.UI.Xaml.Hosting.WindowsXamlManager.InitializeForCurrentThread();
-
-            customInkCanvas = new CustomInkCanvas(Writable: true);
-            customInkCanvas.Name = "CardInkCanvas";
-            customInkCanvas.Width = cardWidth;
-            customInkCanvas.Height = cardHeight;
-            customInkCanvas.VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Stretch;
-            customInkCanvas.HorizontalAlignment = Windows.UI.Xaml.HorizontalAlignment.Stretch;
-            customInkCanvas.Drawing += CustomInkCanvas_Drawing;
-
-            CardInkCanvasHost = new WindowsXamlHost
-            {
-                InitialTypeName = "MyUWPApp.CustomInkCanvas",
-                Name = "CardInkCanvasHost",
-                VerticalAlignment = VerticalAlignment.Stretch,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-            };
-            CardInkCanvasHost.ChildChanged += (_, __) =>
-            {
-                Debug.WriteLine($"[SubWindow] CardInkCanvasHost.ChildChanged: childType={CardInkCanvasHost.Child?.GetType().FullName ?? "<null>"}");
-            };
-
-            CardInkCanvasHost.Child = customInkCanvas;
-            cardInkCanvas = customInkCanvas.InnerInkCanvas;
-
-            CardCanvasGrid.Children.Add(CardInkCanvasHost);
-
-            // NOTE: Do NOT call InitializeForCurrentThread again here.
-            resizeInkCanvas = new CustomInkCanvas(Writable: true);
-            resizeInkCanvas.Name = "ResizeInkCanvas";
-            resizeInkCanvas.Width = cardWidth;
-            resizeInkCanvas.Height = cardHeight;
-            resizeInkCanvas.VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Stretch;
-            resizeInkCanvas.HorizontalAlignment = Windows.UI.Xaml.HorizontalAlignment.Stretch;
-
-            ResizeInkCanvasHost = new WindowsXamlHost
-            {
-                InitialTypeName = "MyUWPApp.CustomInkCanvas",
-                Name = "ResizeInkCanvasHost",
-                VerticalAlignment = VerticalAlignment.Stretch,
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-            ResizeInkCanvasHost.ChildChanged += (_, __) =>
-            {
-                Debug.WriteLine($"[SubWindow] ResizeInkCanvasHost.ChildChanged: childType={ResizeInkCanvasHost.Child?.GetType().FullName ?? "<null>"}");
-            };
-
-            ResizeInkCanvasHost.Child = resizeInkCanvas;
-            CardCanvasGrid.Children.Add(ResizeInkCanvasHost);
-            ResizeInkCanvasHost.Visibility = Visibility.Hidden;
-
-            // NOTE: Do not create Microsoft.Toolkit.Wpf.UI.Controls.InkToolbar here.
-            // This control can trigger internal bindings between UWP and WPF types (Style/Thickness/etc.),
-            // causing binding errors. The actual toolbar UI is provided by the UWP CustomInkToolbar hosted
-            // in XAML (CardInkToolbarHost).
-
-            customInkToolbar.InnerInkToolbar.TargetInkCanvas = cardInkCanvas;
-            cardBaseGrid = customInkCanvas.BaseGrid;
-            testPict = customInkCanvas.TestPict;
             splitView = subwindow.Template.FindName("InkToolbarSplitView", subwindow) as SplitView;
             inkToolbarToggleButton = subwindow.Template.FindName("inkToolbarToggleButton", subwindow) as ToggleButton;
+
+            // 初回表示時に1フレーム描画を促す（SwapChainホスト側がBuildWindowCoreで描画するが保険）
+            try
+            {
+                DxHost?.Render();
+            }
+            catch
+            {
+            }
+
+            EnsureStrokeOverlayWindow();
+
             OnWindowLoaded();
-#endif
         }
-        private void CustomInkCanvas_Drawing(object sender, EventArgs e)
+
+        private void CloseToolbarPaneIfOpen()
         {
-            if (splitView.IsPaneOpen)
+            if (splitView?.IsPaneOpen == true)
             {
                 splitView.IsPaneOpen = false;
+                if (inkToolbarToggleButton != null)
+                {
+                    inkToolbarToggleButton.IsChecked = false;
+                }
             }
         }
+
         private void SubWindow_SourceInitialized(object sender, EventArgs e)
         {
             var hwndSource = (System.Windows.Interop.HwndSource)PresentationSource.FromVisual(this);
@@ -252,23 +192,21 @@ namespace BrainCard
 
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            // RECT 構体を取得
-
             var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
-            var rootGrid = (Grid)this.Template.FindName("RootGrid", this);
+            var rootGrid = (Grid)Template.FindName("RootGrid", this);
             var titleBar = (Grid)rootGrid.FindName("CustomTitleBar");
             double actualWidth = titleBar.ActualWidth;
             double canvasHeight = actualWidth * AspectRatio;
             double actualHeight = canvasHeight + titleBar.ActualHeight;
+
             switch (msg)
             {
                 case WM_SHOWWINDOW:
                     widthGap = 20;
-                    heightGap = (titleBar.ActualHeight) + 20;
-                    windowTop = mainWindow.Top  + 30;
+                    heightGap = titleBar.ActualHeight + 20;
+                    windowTop = mainWindow.Top + 30;
                     windowLeft = mainWindow.Left + 30;
-                    //windowTop = 100;
-                    //windowLeft = 100;
+
                     var rect = new RECT();
                     if (mainWindow.vm.SubWindowPosition == new Point() && mainWindow.vm.SubwindowVisible)
                     {
@@ -278,32 +216,36 @@ namespace BrainCard
                         rect.Bottom = (int)((windowTop + cardHeight + heightGap) * scale);
                     }
                     else
+                    {
                         break;
+                    }
+
                     var width = rect.Right - rect.Left;
                     var height = rect.Bottom - rect.Top;
-                    
-                    if(!mainWindow.vm.IsInEditMode)
+
+                    if (!mainWindow.vm.IsInEditMode)
+                    {
                         SetWindowPos(hwnd, IntPtr.Zero, rect.Left, rect.Top, width, height, 0);
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
-                    this.cardInkCanvas.Width = cardWidth;
-                    this.cardInkCanvas.Height = cardHeight;
-#endif
+                    }
+
                     ContentRootGrid.Width = cardWidth;
                     ContentRootGrid.Height = cardHeight;
                     handled = true;
                     break;
+
                 case WM_SYSCOMMAND:
                     if (wParam.ToInt32() == SC_MINIMIZE)
                     {
                         prevPoint = new RECT
                         {
-                            Left = (int)(this.Left * scale),
-                            Top = (int)(this.Top * scale),
-                            Right = (int)((this.Left + actualWidth) * scale),
-                            Bottom = (int)((this.Top + actualHeight) * scale)
+                            Left = (int)(Left * scale),
+                            Top = (int)(Top * scale),
+                            Right = (int)((Left + actualWidth) * scale),
+                            Bottom = (int)((Top + actualHeight) * scale)
                         };
                     }
                     break;
+
                 case WM_SIZING:
                     currentSizingEdge = wParam.ToInt32();
                     break;
@@ -311,19 +253,16 @@ namespace BrainCard
                 case WM_WINDOWPOSCHANGING:
                     if (lParam != IntPtr.Zero)
                     {
-                        WINDOWPOS position = Marshal.PtrToStructure<WINDOWPOS>(lParam);
-                        // ウィンドウのサイズをアスペクト比に基づいて調整
+                        var position = Marshal.PtrToStructure<WINDOWPOS>(lParam);
                         if (currentSizingEdge != 0 && position.cx != 0 && position.cy != 0)
                         {
                             AdjustWindowSize(ref position, currentSizingEdge, scale);
                             Marshal.StructureToPtr(position, lParam, true);
                         }
-                        //Debug.WriteLine($"{currentSizingEdge}, w:{this.Width}, h:{this.Height}");
-                        // 構造体をポインタに書き戻す
-                        //UpdateChildSizes();
                         currentSizingEdge = 0;
                     }
                     break;
+
                 case WM_EXITSIZEMOVE:
                     break;
             }
@@ -331,270 +270,456 @@ namespace BrainCard
             return IntPtr.Zero;
         }
 
+        private void AdjustWindowSize(ref WINDOWPOS pos, int sizingEdge, double dpiScale)
+        {
+            if (sizingEdge == 0 || pos.cy == 0 || pos.cx == 0) return;
+
+            var resizeBorder = windowChrome.ResizeBorderThickness;
+
+            // SubWindowはカード比率固定
+            switch (sizingEdge)
+            {
+                case WMSZ_TOP:
+                case WMSZ_BOTTOM:
+                case WMSZ_TOPRIGHT:
+                    UpdateChildSizes(windowHeight: pos.cy);
+                    pos.cx = (int)(((ContentRootGrid.ActualWidth + resizeBorder.Right) * dpiScale));
+                    break;
+
+                case WMSZ_LEFT:
+                case WMSZ_RIGHT:
+                case WMSZ_BOTTOMRIGHT:
+                case WMSZ_BOTTOMLEFT:
+                    UpdateChildSizes(windowWidth: pos.cx);
+                    pos.cy = (int)(((ContentRootGrid.ActualHeight + resizeBorder.Bottom) * dpiScale) + heightGap - 20);
+                    break;
+
+                case WMSZ_TOPLEFT:
+                    UpdateChildSizes(windowHeight: pos.cy);
+                    pos.cx = (int)(((ContentRootGrid.ActualWidth + resizeBorder.Right) * dpiScale));
+                    pos.x = (int)(pos.x - (pos.cx - Width * dpiScale));
+                    break;
+            }
+        }
+
         private void UpdateChildSizes(double windowWidth = double.NaN, double windowHeight = double.NaN)
         {
-#if BRAIN_CARD_DISABLE_XAML_ISLANDS
-            return;
-#else
             var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
             double clientWidth = ContentRootGrid.ActualWidth;
             double clientHeight = ContentRootGrid.ActualHeight;
-            var aspect = Math.Min(clientWidth / Values.cardWidth, clientHeight / Values.cardHeight);
-            
-            var renderTransform = new Windows.UI.Xaml.Media.ScaleTransform();
-            renderTransform.ScaleX = aspect;
-            renderTransform.ScaleY = aspect;
+
             if (!double.IsNaN(windowHeight))
             {
-                //clientHeight = (windowHeight / scale) - heightGap;
-                //clientWidth = clientHeight * AspectRatio;
                 clientHeight = (windowHeight / scale) - heightGap;
                 clientWidth = clientHeight * AspectRatio;
             }
             else if (!double.IsNaN(windowWidth))
             {
-                //clientWidth = (windowWidth / scale) - widthGap;
-                //clientHeight = clientWidth / AspectRatio;
                 clientWidth = (windowWidth / scale) - widthGap;
                 clientHeight = clientWidth / AspectRatio;
             }
-            cardInkCanvas.RenderTransform = renderTransform;
 
-            // マージンやパディングがある場合は考慮
-            double newWidth = clientWidth;
-            double newHeight = clientHeight;
-            if (newWidth < 0 || newHeight < 0) return;
-            ContentRootGrid.Width = newWidth;
-            ContentRootGrid.Height = newHeight;
-            //CardCanvasGrid.Width = newWidth;
-            //CardCanvasGrid.Height = newHeight;
-            CardInkCanvasHost.Width = newWidth;
-            CardInkCanvasHost.Height = newHeight;
-            cardInkCanvas.Width = newWidth;
-            cardInkCanvas.Height = newHeight;
-            var childCanvas = CardInkCanvasHost.Child as MyUWPApp.CustomInkCanvas;
-            childCanvas.Width = newWidth;
-            childCanvas.Height = newHeight;
-            CardInkCanvasHost.UpdateLayout();
-            CardInkCanvasHost.InvalidateMeasure();
-            cardInkCanvas.UpdateLayout();
-            cardInkCanvas.InvalidateMeasure();
-            //Debug.WriteLine($"Window {this.ActualWidth}, grid {CardCanvasGrid.ActualWidth}, Host {CardInkCanvasHost.ActualWidth}, inner {childCanvas.ActualWidth}, gap {widthGap}");
-#endif
-        }
+            if (clientWidth < 0 || clientHeight < 0) return;
 
-        private void AdjustWindowSize(ref WINDOWPOS pos, int sizingEdge, double dpiScale)
-        {
-#if BRAIN_CARD_DISABLE_XAML_ISLANDS
-            return;
-#else
-            var childCanvas = CardInkCanvasHost.Child as MyUWPApp.CustomInkCanvas;
-           
-            if (sizingEdge != 0 && pos.cy != 0 && pos.cx != 0)
+            ContentRootGrid.Width = clientWidth;
+            ContentRootGrid.Height = clientHeight;
+
+            try
             {
-                var resizeBorder = windowChrome.ResizeBorderThickness;
-                switch (sizingEdge)
-                {
-                    case WMSZ_TOP:
-                    case WMSZ_BOTTOM:
-                    case WMSZ_TOPRIGHT:
-                        UpdateChildSizes(windowHeight: pos.cy);
-                        pos.cx = (int)(((ContentRootGrid.ActualWidth + resizeBorder.Right) * dpiScale));
-                        break;
-
-                    case WMSZ_LEFT:
-                    case WMSZ_RIGHT:
-                    case WMSZ_BOTTOMRIGHT:
-                    case WMSZ_BOTTOMLEFT:
-                        UpdateChildSizes(windowWidth: pos.cx);
-                        pos.cy = (int)(((ContentRootGrid.ActualHeight + resizeBorder.Bottom) * dpiScale) + heightGap - 20);
-                        break;
-
-                    case WMSZ_TOPLEFT:
-                        UpdateChildSizes(windowHeight: pos.cy);
-                        pos.cx = (int)(((ContentRootGrid.ActualWidth + resizeBorder.Right) * dpiScale));
-                        pos.x = (int)(pos.x - (pos.cx - this.Width * dpiScale));
-                        break;
-                }
-
+                DxHost?.Render();
             }
-            pos.cx += 0;
-            pos.cy += 0;
-#endif
+            catch
+            {
+            }
+
+            SyncOverlayWindowBounds();
+            QueueOverlaySync();
         }
+
+        public bool HasInkStrokes => false;
 
         // SubWindow : Keepボタンがクリックされたときの処理
+        // 保存処理は後でまとめて行うため、ここでは編集結果のキャプチャのみ行う（ストローク/認識はダミー）
         public async void ButtonKeep_Click(object sender, RoutedEventArgs e)
         {
-#if BRAIN_CARD_DISABLE_XAML_ISLANDS
-            return;
-#else
-            var fourgroundStrokes = cardInkCanvas.InkPresenter.StrokeContainer.GetStrokes();
-            if (fourgroundStrokes.Count == 0)
-            {
-                if (!mainWindow.vm.IsInEditMode) return;
-                else
-                {
-                    CanvasClear();
-                    mainWindow.vm.IsInEditMode = false;
-                    mainWindow.EditingCard = null;
-                }
-            }
-            var recogText = await RecognizeInk(cardInkCanvas.InkPresenter.StrokeContainer);
-
-            // MainWindowにcardを渡す
-            if (mainWindow == null)
-                mainWindow = System.Windows.Application.Current.Windows.OfType<MainWindow>().FirstOrDefault();
+            var hasStrokes = HasInkStrokes;
+            var imageSource = await CaputureCanvasAsync();
 
             if (mainWindow != null)
             {
-                var imageSource = await CaputureCanvasAsync();
-                var image = new Image
-                {
-                    Width = imageSource.Width,
-                    Height = imageSource.Height,
-                    Source = imageSource
-                };
-                var resizedInkCanvas = new CustomInkCanvas();
-                resizedInkCanvas.SetInnerCanvas(this.customInkCanvas.InnerInkCanvas);
-
-                if (!mainWindow.vm.IsInEditMode)
-                        mainWindow.AddCard(resizedInkCanvas, imageSource, recogText);
-                else
-                    mainWindow.FinishEditing(customInkCanvas, imageSource, recogText);
+                // 編集確定（新規追加/更新/削除）をMainWindow側に委譲
+                mainWindow.ApplyEditingResultFromSubWindow(imageSource, hasStrokes);
             }
 
             CanvasClear();
-#endif
         }
 
         public ImageSource CaputureCanvas()
         {
-#if BRAIN_CARD_DISABLE_XAML_ISLANDS
-            return null;
-#else
-            var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap((int)cardInkCanvas.ActualWidth, (int)cardInkCanvas.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+            var rtb = new RenderTargetBitmap(
+                (int)Math.Max(1, CardCanvasGrid.ActualWidth),
+                (int)Math.Max(1, CardCanvasGrid.ActualHeight),
+                96,
+                96,
+                PixelFormats.Pbgra32);
             rtb.Render(CardCanvasGrid);
+            rtb.Freeze();
             return rtb;
-#endif
         }
 
-        public async Task<System.Windows.Media.ImageSource> CaputureCanvasAsync()
+        public Task<ImageSource> CaputureCanvasAsync()
         {
-#if BRAIN_CARD_DISABLE_XAML_ISLANDS
-            return null;
-#else
-            resizeInkCanvas.SetInnerCanvas(this.customInkCanvas.InnerInkCanvas);
-            resizeInkCanvas.UpdateLayout();
-
-
-            var renderTargetBitmap = new Windows.UI.Xaml.Media.Imaging.RenderTargetBitmap();
-            await renderTargetBitmap.RenderAsync(resizeInkCanvas.InnerInkCanvas);
-            
-            var pixelBuffer = await renderTargetBitmap.GetPixelsAsync();
-            byte[] pixels = pixelBuffer.ToArray();
-            int width = renderTargetBitmap.PixelWidth;
-            int height = renderTargetBitmap.PixelHeight;
-            var dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
-
-            var wb = new System.Windows.Media.Imaging.WriteableBitmap(width, height, dpi, dpi, PixelFormats.Bgra32, null);
-            wb.Lock();
-            wb.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
-            wb.Unlock();
-            return wb;
-#endif
+            // WPF RenderTargetBitmapは同期レンダリング
+            return Task.FromResult(CaputureCanvas());
         }
 
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
-        private async Task<string> RecognizeInk(InkStrokeContainer strokeContainer)
+        private void EnsureStrokeOverlayWindow()
         {
-            if (strokeContainer.GetStrokes().Count() <= 0) return "";
-            InkRecognizerContainer inkRecognizer = new InkRecognizerContainer();
-            var recognitionResults = await inkRecognizer.RecognizeAsync(strokeContainer, InkRecognitionTarget.All);
-            var recognizedText = recognitionResults.Select(x => x.GetTextCandidates().First()).Aggregate((current, next) => current + " " + next);
-            return recognizedText;
-        }
-#endif
+            if (_strokeOverlayWindow != null)
+            {
+                return;
+            }
 
-        public void setEditCanvas(Card card)
+            _strokeOverlayWindow = new StrokeOverlayWindow
+            {
+                Owner = this,
+                ShowActivated = false
+            };
+
+            _strokeOverlayWindow.Loaded += (_, __) => SyncOverlayWindowBounds();
+            _strokeOverlayWindow.Show();
+
+            SyncOverlayWindowBounds();
+            UpdateStrokeOverlayWindow();
+        }
+
+        private void CloseStrokeOverlayWindow()
         {
-#if BRAIN_CARD_DISABLE_XAML_ISLANDS
-            return;
-#else
-            this.customInkCanvas.SetInnerCanvas(card.CardCanvas);
-#endif
+            try
+            {
+                _strokeOverlayWindow?.Close();
+            }
+            catch
+            {
+            }
+            finally
+            {
+                _strokeOverlayWindow = null;
+            }
+        }
+
+        private void SyncOverlayWindowBounds()
+        {
+            if (_strokeOverlayWindow == null)
+            {
+                return;
+            }
+
+            try
+            {
+                // CardCanvasGridのスクリーン座標へ合わせる
+                var topLeft = CardCanvasGrid.PointToScreen(new Point(0, 0));
+                var dpi = VisualTreeHelper.GetDpi(this);
+                var leftDip = topLeft.X / dpi.DpiScaleX;
+                var topDip = topLeft.Y / dpi.DpiScaleY;
+
+                _strokeOverlayWindow.Left = leftDip;
+                _strokeOverlayWindow.Top = topDip;
+                _strokeOverlayWindow.Width = Math.Max(1, CardCanvasGrid.ActualWidth);
+                _strokeOverlayWindow.Height = Math.Max(1, CardCanvasGrid.ActualHeight);
+            }
+            catch
+            {
+            }
+        }
+
+        private void UpdateStrokeOverlayWindow()
+        {
+            if (_strokeOverlayWindow == null)
+            {
+                return;
+            }
+
+            // 既存の点列はDIP座標なので、そのままCanvasへ投入できる
+            _strokeOverlayWindow.SetStrokes(_strokes, _currentStroke, includeCurrent: _isCollecting);
+        }
+
+        private void EnsureOverlayCanvas()
+        {
+            // no-op: HwndHostのAirspace問題で同一ツリーのCanvasは見えないため使用しない
+        }
+
+        private readonly List<Polyline> _overlayPolylines = new();
+
+        private void AddOverlayStroke(IReadOnlyList<Point> dipPoints)
+        {
+            // no-op: 透明オーバーレイWindow側で描画する
+        }
+
+        private static Bcf2Stroke MapToV2Stroke(IReadOnlyList<Point> dipPoints)
+        {
+            var stroke = new Bcf2Stroke
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Tool = "pen",
+                Color = DefaultStrokeColor,
+                Size = DefaultStrokeSizeDip,
+                DeviceKind = "mouse"
+            };
+
+            var t = 0;
+            foreach (var p in dipPoints)
+            {
+                stroke.Points.Add(new Bcf2Point
+                {
+                    X = p.X,
+                    Y = p.Y,
+                    Pressure = DefaultStrokePressure,
+                    T = t
+                });
+
+                // 最小到達点: 時刻は仮（等間隔）
+                t += 16;
+            }
+
+            return stroke;
+        }
+
+        private const double MinDistanceDip = 0.5;
+
+        private static bool ShouldAppendPoint(IReadOnlyList<Point> stroke, Point p, double minDistanceDip)
+        {
+            if (stroke.Count == 0) return true;
+            var last = stroke[stroke.Count - 1];
+            var dx = p.X - last.X;
+            var dy = p.Y - last.Y;
+            return (dx * dx + dy * dy) >= (minDistanceDip * minDistanceDip);
+        }
+
+        private Point ToCardCanvasGridPoint(Point dxHostPoint)
+        {
+            try
+            {
+                // DxHost上のDIP座標をSubWindow内座標へ
+                var windowPt = DxHost.TranslatePoint(dxHostPoint, this);
+                // SubWindow内座標をCardCanvasGrid内座標へ
+                var gridPt = this.TranslatePoint(windowPt, CardCanvasGrid);
+                return gridPt;
+            }
+            catch
+            {
+                return dxHostPoint;
+            }
+        }
+
+        private bool _isInputCaptured;
+
+        private void InputCaptureLayer_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            CloseToolbarPaneIfOpen();
+
+            _isCollecting = true;
+            _currentStroke.Clear();
+
+            var p = e.GetPosition(CardCanvasGrid);
+            _currentStroke.Add(p);
+
+            _isInputCaptured = true;
+            InputCaptureLayer.CaptureMouse();
+
+            UpdateOverlay();
+            e.Handled = true;
+        }
+
+        private void InputCaptureLayer_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isCollecting || !_isInputCaptured)
+            {
+                return;
+            }
+
+            if (e.LeftButton != MouseButtonState.Pressed)
+            {
+                return;
+            }
+
+            var p = e.GetPosition(CardCanvasGrid);
+            if (ShouldAppendPoint(_currentStroke, p, MinDistanceDip))
+            {
+                _currentStroke.Add(p);
+                UpdateOverlay();
+            }
+
+            e.Handled = true;
+        }
+
+        private void InputCaptureLayer_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isCollecting)
+            {
+                return;
+            }
+
+            _isCollecting = false;
+
+            var p = e.GetPosition(CardCanvasGrid);
+            if (_currentStroke.Count == 0)
+            {
+                _currentStroke.Add(p);
+            }
+
+            _strokes.Add(new List<Point>(_currentStroke));
+            var v2 = MapToV2Stroke(_currentStroke);
+            _v2Strokes.Add(v2);
+
+            UpdateOverlay();
+
+            if (_isInputCaptured)
+            {
+                _isInputCaptured = false;
+                InputCaptureLayer.ReleaseMouseCapture();
+            }
+
+            e.Handled = true;
+        }
+
+        private void DxHost_PointerDown(object sender, Win2DHost.HostPointerEventArgs e)
+        {
+            // InputCaptureLayer側で処理するため補助扱い（将来ペン対応などで使う可能性あり）
+            if (_isInputCaptured) return;
+
+            CloseToolbarPaneIfOpen();
+
+            _isCollecting = true;
+            _currentStroke.Clear();
+            _currentStroke.Add(ToCardCanvasGridPoint(e.Position));
+
+            UpdateOverlay();
+
+            Debug.WriteLine($"[Input] Down: p={e.Position} count={_currentStroke.Count}");
+        }
+
+        private void DxHost_PointerMove(object sender, Win2DHost.HostPointerEventArgs e)
+        {
+            if (_isInputCaptured) return;
+            if (!_isCollecting) return;
+
+            var p = ToCardCanvasGridPoint(e.Position);
+            if (ShouldAppendPoint(_currentStroke, p, MinDistanceDip))
+            {
+                _currentStroke.Add(p);
+                UpdateOverlay();
+
+                Debug.WriteLine($"[Input] Move: p={p} count={_currentStroke.Count}");
+            }
+        }
+
+        private void DxHost_PointerUp(object sender, Win2DHost.HostPointerEventArgs e)
+        {
+            if (_isInputCaptured) return;
+            if (!_isCollecting) return;
+
+            _isCollecting = false;
+
+            var p = ToCardCanvasGridPoint(e.Position);
+            if (_currentStroke.Count == 0)
+            {
+                _currentStroke.Add(p);
+            }
+
+            _strokes.Add(new List<Point>(_currentStroke));
+            var v2 = MapToV2Stroke(_currentStroke);
+            _v2Strokes.Add(v2);
+
+            UpdateOverlay();
+
+            Debug.WriteLine($"[Input] Up: p={p} strokePoints={_currentStroke.Count} totalStrokes={_strokes.Count} v2Strokes={_v2Strokes.Count}");
+        }
+
+        public void CanvasClear()
+        {
+            _isCollecting = false;
+            _currentStroke.Clear();
+            _strokes.Clear();
+            _v2Strokes.Clear();
+
+            _strokeOverlayWindow?.Clear();
+
+            UpdateOverlay();
+
+            try
+            {
+                DxHost?.Render();
+            }
+            catch
+            {
+            }
         }
 
         private void ClearButton_Click(object sender, RoutedEventArgs e)
         {
             CanvasClear();
             if (mainWindow.vm.IsInEditMode) mainWindow.CancelEditing();
-            
         }
 
-        private void SplitView_PaneOpening(ModernWpf.Controls.SplitView sender, object args)
-        {
-            //CardCanvasHost.Visibility = Visibility.Collapsed;
-        }
+        private void SplitView_PaneOpening(ModernWpf.Controls.SplitView sender, object args) { }
 
-        private void SplitView_PaneClosed(ModernWpf.Controls.SplitView sender, object args)
-        {
-            //CardCanvasHost.Visibility = Visibility.Visible;
-        }
-        // SubWindow : キャンバスの初期化
-        public void CanvasClear()
-        {
-#if BRAIN_CARD_DISABLE_XAML_ISLANDS
-            return;
-#else
-            cardInkCanvas.InkPresenter.StrokeContainer.Clear();
-#endif
-        }
+        private void SplitView_PaneClosed(ModernWpf.Controls.SplitView sender, object args) { }
 
-        // SubWindow : タイトルバーでウィンドウをドラッグ移動する
         private void CustomTitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (splitView.IsPaneOpen)
-            {
-                splitView.IsPaneOpen = false;
-                inkToolbarToggleButton.IsChecked = false;
-            }
+            CloseToolbarPaneIfOpen();
+
             if (e.ButtonState == MouseButtonState.Pressed)
             {
                 if (!mainWindow.vm.IsInEditMode)
-                    this.DragMove();
+                {
+                    DragMove();
+                    SyncOverlayWindowBounds();
+                }
                 currentScreen = forms.Screen.FromHandle(new System.Windows.Interop.WindowInteropHelper(this).Handle);
             }
-
         }
-
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
-        private void CardInkToolbarHost_ChildChanged(object sender, EventArgs e)
-        {
-            WindowsXamlHost windowsXamlHost = sender as WindowsXamlHost;
-            customInkToolbar = windowsXamlHost.Child as CustomInkToolbar;
-            if (customInkToolbar == null) return;
-            if (customInkCanvas != null)
-            {
-                customInkToolbar.InnerInkToolbar.TargetInkCanvas = customInkCanvas.InnerInkCanvas;
-            }
-        }
-#endif
 
         private void ToggleButton_Checked(object sender, RoutedEventArgs e)
         {
-            splitView.IsPaneOpen = true;
-
+            if (splitView != null) splitView.IsPaneOpen = true;
         }
 
         private void ToggleButton_Unchecked(object sender, RoutedEventArgs e)
         {
-            splitView.IsPaneOpen = false;
-
+            if (splitView != null) splitView.IsPaneOpen = false;
         }
+
         public void OnWindowLoaded()
         {
             WindowLoaded?.Invoke(null, null);
+        }
+
+        public void setEditCanvas(Card card)
+        {
+            // 暫定: PNGキャッシュ表示が前提になるまで、ストローク復元は行わない
+            // （Win2D移行後に v2 stroke へ統一して復元する）
+        }
+
+        private void QueueOverlaySync()
+        {
+            if (_overlaySyncQueued) return;
+            _overlaySyncQueued = true;
+
+            Dispatcher.InvokeAsync(() =>
+            {
+                _overlaySyncQueued = false;
+                SyncOverlayWindowBounds();
+            }, System.Windows.Threading.DispatcherPriority.Render);
+        }
+
+        private void UpdateOverlay()
+        {
+            // HwndHostのAirspace問題によりWPF Canvas重ね描画は見えないため、別Windowへ描画する
+            EnsureStrokeOverlayWindow();
+            SyncOverlayWindowBounds();
+            UpdateStrokeOverlayWindow();
         }
     }
 }

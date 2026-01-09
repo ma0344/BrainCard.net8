@@ -81,6 +81,8 @@
   <ItemGroup>
     <PackageReference Include="ModernWpfUI" Version="0.9.6" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.2" />
+    <PackageReference Include="Vortice.DXGI" Version="3.8.2" />
   </ItemGroup>
 
   <ItemGroup>
@@ -103,7 +105,7 @@
 	  </None>
 	</ItemGroup>
 	<ItemGroup>
-	  <ProjectReference Include="MyUWPApp\MyUWPApp.csproj">
+	  <ProjectReference Include="MyUWPApp\MyUWPApp.csproj" Condition="!$([System.String]::Copy('$(DefineConstants)').Contains('BRAIN_CARD_DISABLE_XAML_ISLANDS'))">
 	    <ReferenceOutputAssembly></ReferenceOutputAssembly>
 	    <Private></Private>
 	  </ProjectReference>

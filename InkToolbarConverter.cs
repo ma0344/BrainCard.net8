@@ -18,15 +18,49 @@ namespace BrainCard
     internal sealed class UwpToWpfStyleConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            // UWP Style cannot be converted to WPF Style. Avoid binding error by not setting the value.
-            return DependencyProperty.UnsetValue;
-        }
+            => DependencyProperty.UnsetValue;
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => Binding.DoNothing;
     }
 
+#if BRAIN_CARD_DISABLE_XAML_ISLANDS
+    internal sealed class UwpToWpfFlowDirectionConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => DependencyProperty.UnsetValue;
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => Binding.DoNothing;
+    }
+
+    internal sealed class UwpToWpfThicknessConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => DependencyProperty.UnsetValue;
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => Binding.DoNothing;
+    }
+
+    internal sealed class UwpToWpfHorizontalAlignmentConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => DependencyProperty.UnsetValue;
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => Binding.DoNothing;
+    }
+
+    internal sealed class UwpToWpfVerticalAlignmentConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => DependencyProperty.UnsetValue;
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => Binding.DoNothing;
+    }
+#else
     internal sealed class UwpToWpfFlowDirectionConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -146,6 +180,7 @@ namespace BrainCard
             return Binding.DoNothing;
         }
     }
+#endif
 
     internal sealed class NullToUnsetValueConverter : IValueConverter
     {

@@ -1,6 +1,5 @@
 ﻿using BrainCard.ViewModels;
 using ModernWpf;
-using MyUWPApp;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -9,7 +8,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,14 +22,16 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using Windows.Storage.Streams;
-using Windows.UI.Input.Inking;
-using System.Runtime.CompilerServices;
-using Windows.UI.Input.Inking;
 using static BrainCard.Values;
 using forms = System.Windows.Forms;
 using ui = ModernWpf.Controls;
 
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
+using MyUWPApp;
+using System.Runtime.InteropServices.WindowsRuntime;
+using Windows.Storage.Streams;
+using Windows.UI.Input.Inking;
+#endif
 
 
 namespace BrainCard
@@ -324,6 +324,37 @@ namespace BrainCard
         }
 
         // カード : カードをメインキャンバスに追加
+        #if BRAIN_CARD_DISABLE_XAML_ISLANDS
+        public Card AddCard(object customInkCanvas, ImageSource imageSource, string recogText, double positionLeft = double.NaN, double positionTop = double.NaN, AddMode addMode = AddMode.Cleate)
+        {
+            if (double.IsNaN(lastImagePositionLeft)) lastImagePositionLeft = 0;
+            if (double.IsNaN(lastImagePositionTop)) lastImagePositionTop = 0;
+
+            var card = new Card(this, inkCanvas: null, imageSource) { Z = currentZIndex };
+            currentZIndex++;
+
+            card.SetText(recogText);
+
+            card.Left = !double.IsNaN(positionLeft) ? positionLeft : lastImagePositionLeft;
+            card.Top = !double.IsNaN(positionTop) ? positionTop : lastImagePositionTop;
+            Canvas.SetZIndex(card, card.Z);
+            Canvas.SetLeft(card, card.Left);
+            Canvas.SetTop(card, card.Top);
+
+            card.CardClicked += Card_Clicked;
+            card.CardSelected += Card_CardSelected;
+            card.CardDraging += Card_CardDraging;
+            card.EditRequested += Card_EditRequested;
+            card.DeleteRequested += Card_DeleteRequested;
+            card.CardDragCompleated += Card_CardDragCompleated;
+
+            MainCanvas.Children.Add(card);
+            CardList.Add(card);
+            CurrentCard_Change(card);
+            lastImagePositionLeft += 20;
+            return card;
+        }
+        #else
         public Card AddCard(CustomInkCanvas customInkCanvas, ImageSource imageSource, string recogText, double positionLeft = double.NaN, double positionTop = double.NaN, AddMode addMode = AddMode.Cleate)
         {
             if (double.IsNaN(lastImagePositionLeft)) lastImagePositionLeft = 0;
@@ -384,6 +415,7 @@ namespace BrainCard
             lastImagePositionLeft += 20; // Add a margin of 10 between images
             return card;
         }
+        #endif
 
         private void Card_CardDragCompleated(object sender, EventArgs e)
         {
@@ -497,6 +529,18 @@ namespace BrainCard
         }
 
         // カード : 編集を適用して編集モードを終了する際の処理
+#if BRAIN_CARD_DISABLE_XAML_ISLANDS
+        public void FinishEditing(object customInkCanvas, ImageSource imageSource, string recogText)
+        {
+            if (EditingCard == null) return;
+            UpdateCard(customInkCanvas, imageSource, recogText);
+            OverrayGrid.Visibility = Visibility.Collapsed;
+            EditingCard.Visibility = Visibility.Visible;
+            RestoreSubWindowPosition();
+            EditingCard = null;
+            vm.IsInEditMode = false;
+        }
+#else
         public void FinishEditing(CustomInkCanvas customInkCanvas, ImageSource imageSource, string recogText)
         {
             if (EditingCard == null) return;
@@ -507,27 +551,17 @@ namespace BrainCard
             EditingCard = null;
             vm.IsInEditMode = false; // 編集モードを終了
         }
+#endif
 
-        // カード : 編集を破棄して編集モードを終了する際の処理
-        public void CancelEditing()
-        {
-            OverrayGrid.Visibility = Visibility.Collapsed;
-            EditingCard.Visibility = Visibility.Visible;
-            RestoreSubWindowPosition();
-            EditingCard = null;
-            vm.IsInEditMode = false;
-        }
-        private void Card_LayoutUpdated(object sender, EventArgs e)
-        {
-            
-            if(sender is Card card)
-            {
-                card.LayoutUpdated -= Card_LayoutUpdated;
-                RestoreSubWindowPosition();
-                EditingCard = null;
-            }
-        }
         // カード : 編集後にカードを更新
+#if BRAIN_CARD_DISABLE_XAML_ISLANDS
+        public void UpdateCard(object customInkCanvas, ImageSource imageSource, string recogText)
+        {
+            if (EditingCard == null) return;
+            EditingCard.CardImage.Source = imageSource;
+            EditingCard.SetText(recogText);
+        }
+#else
         public void UpdateCard(CustomInkCanvas customInkCanvas, ImageSource imageSource, string recogText)
         {
             //EditingCard.CardInkCanvas.InnerPresenter.StrokeContainer.Clear();
@@ -535,6 +569,7 @@ namespace BrainCard
             EditingCard.CardImage.Source = imageSource;
             EditingCard.SetText(recogText);
         }
+#endif
 
         // カード : 編集モードが終了した際のSubWindowの位置復帰処理
         public void RestoreSubWindowPosition()
@@ -591,6 +626,7 @@ namespace BrainCard
         /// <summary>
         /// UWP InkStrokeを拡大縮小などで変換するサンプルメソッド
         /// </summary>
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
         public InkStroke TransformInkStroke(InkStroke originalStroke, float scaleFactor)
         {
             // 元ストロークのInkPointsを取得
@@ -611,6 +647,7 @@ namespace BrainCard
             // 新しいストロークを作成（PointTransformは自動的に適用）
             return builder.CreateStrokeFromInkPoints(transformedPoints, originalStroke.PointTransform);
         }
+#endif
 
         private void TestButton_Click(object sender, RoutedEventArgs e)
         {
@@ -878,49 +915,21 @@ namespace BrainCard
         // SplitView : セーブボタン : 現在の状態を保存します。
         private void SaveState(string filename)
         {
+            // 仕様: 保存は諸々が揃ってから実装する（現時点ではボタンのみ有効）。
             if (string.IsNullOrWhiteSpace(filename)) return;
 
-            List<SavedImage> savedImages = new List<SavedImage>();
-            foreach (var child in CardList)
-            {
-                if (child is Card card)
-                {
-                    var serializedStrokes = SerializeStrokes(card.CardInkCanvas.InnerPresenter);
-                    var savedImage = new SavedImage
-                    {
-                        Id = string.IsNullOrWhiteSpace(card.Id) ? Guid.NewGuid().ToString("N") : card.Id,
-                        X = card.Left,
-                        Y = card.Top,
-                        Z = card.Z,
-                        RecogText = card.RecognizedText,
-                        InkData = serializedStrokes.Result
-                    };
-                    card.Id = savedImage.Id;
-                    savedImages.Add(savedImage);
-
-                    var pngPath = GetCardPngPath(filename, savedImage.Id);
-                    if (pngPath != null && card.CardImage?.Source is BitmapSource bmp)
-                    {
-                        SavePng(pngPath, bmp);
-                    }
-                }
-            }
-
-            string json = JsonConvert.SerializeObject(savedImages, Newtonsoft.Json.Formatting.Indented);
-            File.WriteAllText(filename, json);
-
-            // ファイルの状態を更新します（ウィンドウタイトルは ViewModel のプロパティにバインドされています）。
             if (vm != null)
             {
                 vm.CurrentFileName = filename;
                 vm.IsNewFile = false;
             }
 
-            StatusBarMessageTextBlock.Text = "保存しました。";
+            StatusBarMessageTextBlock.Text = "（未実装）保存は現在無効です。";
             StatusbarTimer_start();
         }
 
         // SplitView : セーブボタン : InkPresenterをJson文字列に変換
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
         private async Task<string> SerializeStrokes(Windows.UI.Input.Inking.InkPresenter presenter)
         {
             var container = presenter.StrokeContainer;
@@ -928,10 +937,11 @@ namespace BrainCard
             using IRandomAccessStream stream = ms.AsRandomAccessStream();
             await container.SaveAsync(stream);
             var isf = ms.ToArray();
-            // StrokeCollectionData を JSON にシリアル化
+            // StrokeCollectionData を JSON にシリアライズ
             string json = JsonConvert.SerializeObject(isf);
             return json;
         }
+#endif
 
         // SplitView : ロードボタン : クリックしたときの処理
         private async void LoadButton_Click(object sender, RoutedEventArgs e)
@@ -973,18 +983,15 @@ namespace BrainCard
         {
             if (!File.Exists(filename)) return;
 
-            // 多重ロードを防止
             await _loadSemaphore.WaitAsync();
             SetLoadingUi(true, "LoadingMessage");
 
-            // 進捗初期化（決定型プログレス表示用）
             if (vm != null)
             {
                 vm.LoadingCurrent = 0;
                 vm.LoadingTotal = 0;
             }
 
-            // オーバーレイを確実に表示するため、レイアウト更新→Render優先度で一度処理を返す
             try
             {
                 OverrayGrid?.UpdateLayout();
@@ -992,12 +999,10 @@ namespace BrainCard
             }
             catch
             {
-                // 描画待ち失敗はロード継続
             }
- 
-             try
-             {
-                // Update file state (Title is bound).
+
+            try
+            {
                 if (vm != null)
                 {
                     vm.CurrentFileName = filename;
@@ -1010,14 +1015,6 @@ namespace BrainCard
                 CardList.Clear();
                 MainCanvas.Children.Clear();
 
-                // ストローク復元中のちらつきを防ぐ
-                 var prevHostVisibility = subWindow.CardInkCanvasHost?.Visibility ?? Visibility.Visible;
-                 if (subWindow.CardInkCanvasHost != null)
-                 {
-                     subWindow.CardInkCanvasHost.Visibility = Visibility.Collapsed;
-                 }
-                
-                // 重いI/OとJSON解析はUIスレッド外で実行
                 List<SavedImage> savedImages;
                 {
                     var json = await Task.Run(() => File.ReadAllText(filename));
@@ -1029,99 +1026,79 @@ namespace BrainCard
                     vm.LoadingTotal = savedImages?.Count ?? 0;
                     vm.LoadingCurrent = 0;
                 }
- 
-                try
+
+                if (savedImages == null) return;
+
+                var i = 0;
+                foreach (SavedImage savedImage in savedImages)
                 {
-                    var i = 0;
-                    foreach (SavedImage savedImage in savedImages)
-                     {
-                        i++;
-                            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+                    i++;
+                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
 
-                         if (vm != null)
-                         {
-                             vm.LoadingCurrent = Math.Min(i, vm.LoadingTotal);
-                         }
-
-                         // 後方互換: Idが無い場合は付与
-                         if (string.IsNullOrWhiteSpace(savedImage.Id))
-                         {
-                             savedImage.Id = Guid.NewGuid().ToString("N");
-                         }
-
-                        var cachedPngPath = GetCardPngPath(filename, savedImage.Id);
-                        ImageSource imageSource = TryLoadPng(cachedPngPath);
-
-                        // カスタムInkCanvasを作成し、ストロークを設定
-                        CustomInkCanvas customInkCanvas = subWindow.customInkCanvas;
-                        var innerInkCanvas = customInkCanvas.InnerInkCanvas;
-                        var resizeInkCanvas = subWindow.resizeInkCanvas;
-
-                        // ストロークデータを復元
-                        innerInkCanvas.InkPresenter.StrokeContainer = await DeserializeStrokes(savedImage.InkData);
-
-                        if (imageSource == null)
-                        {
-                            resizeInkCanvas.SetInnerCanvas(innerInkCanvas);
-                            resizeInkCanvas.UpdateLayout();
-
-                            var renderTargetBitmap = new Windows.UI.Xaml.Media.Imaging.RenderTargetBitmap();
-                            await renderTargetBitmap.RenderAsync(resizeInkCanvas.InnerInkCanvas);
-
-                            var pixelBuffer = await renderTargetBitmap.GetPixelsAsync();
-                            byte[] pixels = pixelBuffer.ToArray();
-                            int width = renderTargetBitmap.PixelWidth;
-                            int height = renderTargetBitmap.PixelHeight;
-                            var dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
-
-                            var wb = new System.Windows.Media.Imaging.WriteableBitmap(width, height, dpi, dpi, PixelFormats.Bgra32, null);
-                            wb.Lock();
-                            wb.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
-                            wb.Unlock();
-                            imageSource = wb;
-
-                            if (cachedPngPath != null)
-                            {
-                                SavePng(cachedPngPath, wb);
-                            }
-                        }
-
-                        // カードを復元
-                        var card = AddCard(customInkCanvas, imageSource, savedImage.RecogText, savedImage.X, savedImage.Y, AddMode.Load);
-                        card.Id = savedImage.Id;
-                    }
-                }
-                finally
-                {
-                    if (subWindow.CardInkCanvasHost != null)
+                    if (vm != null)
                     {
-                        subWindow.CardInkCanvasHost.Visibility = prevHostVisibility;
+                        vm.LoadingCurrent = Math.Min(i, vm.LoadingTotal);
                     }
-                }
- 
-             // Zインデックスを再設定
-             UpdateZIndex();
 
-             // キャンバスの表示を更新
-             MainCanvas.InvalidateVisual();
-             CardsLoaded?.Invoke(this, EventArgs.Empty);
-             subWindow.CanvasClear();
+                    if (string.IsNullOrWhiteSpace(savedImage.Id))
+                    {
+                        savedImage.Id = Guid.NewGuid().ToString("N");
+                    }
+
+                    var cachedPngPath = GetCardPngPath(filename, savedImage.Id);
+                    ImageSource imageSource = TryLoadPng(cachedPngPath);
+
+                    // 仕様: PNGキャッシュが無いカードは読み込まない（後でWin2Dから生成する）
+                    if (imageSource == null)
+                    {
+                        continue;
+                    }
+
+                    // Inkは現状ダミー（Win2D移行後にv2 strokeへ統一して復元する）
+                    var card = new Card(this, inkCanvas: null, imageSource);
+                    card.Id = savedImage.Id;
+                    card.Left = savedImage.X;
+                    card.Top = savedImage.Y;
+                    card.Z = savedImage.Z;
+                    card.SetText(savedImage.RecogText);
+
+                    Canvas.SetLeft(card, card.Left);
+                    Canvas.SetTop(card, card.Top);
+                    Canvas.SetZIndex(card, card.Z);
+
+                    card.CardClicked += Card_Clicked;
+                    card.CardSelected += Card_CardSelected;
+                    card.CardDraging += Card_CardDraging;
+                    card.EditRequested += Card_EditRequested;
+                    card.DeleteRequested += Card_DeleteRequested;
+                    card.CardDragCompleated += Card_CardDragCompleated;
+
+                    MainCanvas.Children.Add(card);
+                    CardList.Add(card);
+                    currentZIndex = Math.Max(currentZIndex, card.Z + 1);
+                }
+
+                UpdateZIndex();
+                MainCanvas.InvalidateVisual();
+                CardsLoaded?.Invoke(this, EventArgs.Empty);
+                subWindow.CanvasClear();
             }
             finally
             {
                 SetLoadingUi(false);
-                
-                // 進捗リセット
+
                 if (vm != null)
                 {
                     vm.LoadingCurrent = 0;
                     vm.LoadingTotal = 0;
                 }
+
                 _loadSemaphore.Release();
             }
         }
 
         // SplitView : ロードボタン : Json文字列をInkStrokeContainerに変換
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
         private async Task<InkStrokeContainer> DeserializeStrokes(string json)
         {
             var isfData = JsonConvert.DeserializeObject<byte[]>(json);
@@ -1129,9 +1106,10 @@ namespace BrainCard
             using var stream = ms.AsRandomAccessStream();
 
             var container = new InkStrokeContainer();
-            await container.LoadAsync(stream); 
+            await container.LoadAsync(stream);
             return container;
         }
+#endif
 
         // SplitView : クリアボタン : クリックしたときの処理
         private void ClearAllButton_Click(object sender, RoutedEventArgs e)
@@ -1305,7 +1283,7 @@ namespace BrainCard
         private void ImageScaleSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (MainCanvasTransform is null) return;
-            // ToDo : 拡大縮小中心位置の調整（マウスホイール使用時とスライダー使用時の挙動）
+            // ToDo : 拡大縮小中心位置の調整（マウスホイイール使用時とスライダー使用時の挙動）
             var scale = ImageScaleSlider.Value / 100;
             double prevScale = oldScale;
             double offsetX;
@@ -1655,7 +1633,9 @@ namespace BrainCard
         var debugSwitch = sender as ModernWpf.Controls.ToggleSwitch;
         if (debugSwitch.IsOn)
         {
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
             subWindow.testPict.Visibility = Windows.UI.Xaml.Visibility.Visible;
+#endif
             vm.TestPictVisible = Visibility.Visible;
             vm.DebugTextVisible = Visibility.Visible;
             CardsListView.InvalidateVisual();
@@ -1664,7 +1644,9 @@ namespace BrainCard
         }
         else
         {
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
             subWindow.testPict.Visibility = Windows.UI.Xaml.Visibility.Collapsed;
+#endif
             vm.TestPictVisible = Visibility.Hidden;
             vm.DebugTextVisible = Visibility.Collapsed;
             CardsListView.InvalidateVisual();
@@ -1799,6 +1781,76 @@ namespace BrainCard
         using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.Read);
         encoder.Save(fs);
     }
+
+        // カード : 編集を破棄して編集モードを終了する際の処理
+        public void CancelEditing()
+        {
+            OverrayGrid.Visibility = Visibility.Collapsed;
+            if (EditingCard != null)
+            {
+                EditingCard.Visibility = Visibility.Visible;
+            }
+            RestoreSubWindowPosition();
+            EditingCard = null;
+            vm.IsInEditMode = false;
+        }
+
+        public void ApplyEditingResultFromSubWindow(ImageSource imageSource, bool hasStrokes)
+        {
+            // ロード中は無視
+            if (vm?.IsLoading == true) return;
+
+            // 編集モードでない場合は、現状のUIフローが未接続のため何もしない
+            if (vm?.IsInEditMode != true)
+            {
+                return;
+            }
+
+            var target = EditingCard;
+
+            // 既存カード編集: 空ストロークなら削除確認
+            if (target != null)
+            {
+                if (!hasStrokes)
+                {
+                    var result = MessageBox.Show(
+                        this,
+                        "ストロークがありません。カードを削除しますか？",
+                        "確認",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        CancelEditing();
+                        Card_Delete(target, EventArgs.Empty);
+                        return;
+                    }
+
+                    // 削除しない場合は編集継続（SubWindow側はCanvasClearしているので空になる）
+                    // 仕様上「空ストロークのカードは作らない」ため、ここではキャンセル扱いで終了
+                    CancelEditing();
+                    return;
+                }
+
+                // ストロークあり: 画像更新して編集終了
+                FinishEditing(customInkCanvas: null, imageSource, recogText: target.RecognizedText);
+                return;
+            }
+
+            // 新規作成: 空ストロークなら追加しない
+            if (!hasStrokes)
+            {
+                StatusBarMessageTextBlock.Text = "ストロークがないためカードを作成しません。";
+                StatusbarTimer_start();
+                CancelEditing();
+                return;
+            }
+
+            // 新規作成: ストロークありなら追加
+            AddCard(customInkCanvas: null, imageSource, recogText: string.Empty);
+            CancelEditing();
+        }
 
     }
 

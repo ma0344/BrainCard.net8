@@ -6,6 +6,7 @@
         xmlns:local="clr-namespace:BrainCard"
         xmlns:ui="http://schemas.modernwpf.com/2019"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        xmlns:win2dhost="clr-namespace:BrainCard.Win2DHost"
         mc:Ignorable="d"
         ui:WindowHelper.UseModernWindowStyle="True"
         ui:TitleBar.ExtendViewIntoTitleBar="True"
@@ -106,7 +107,7 @@
 
                     <Grid.RowDefinitions>
                         <RowDefinition Height="45" />
-                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <!-- カスタムタイトルバー -->
                     <Grid x:Name="CustomTitleBar"
@@ -149,10 +150,12 @@
                                           PaneOpening="SplitView_PaneOpening"
                                           PaneClosed="SplitView_PaneClosed">
                                 <ui:SplitView.Pane>
-                                    <!-- XAML Islands disabled on .NET 8 build (Toolkit XamlHost not referenced). -->
-                                    <Border Width="200" Background="Transparent">
-                                        <TextBlock Margin="8" Text="Ink toolbar is unavailable in this build." />
-                                    </Border>
+                                    <!-- InkToolbarは自前実装予定: StackPanelでプレースホルダ -->
+                                    <StackPanel Width="200"
+                                                Background="Transparent"
+                                                Margin="8">
+                                        <TextBlock Text="Toolbar (placeholder)" />
+                                    </StackPanel>
                                 </ui:SplitView.Pane>
 
                             </ui:SplitView>
@@ -207,20 +210,38 @@
 
     <!-- ウィンドウの内容 -->
     <Grid x:Name="ContentRootGrid"
-          d:Height ="380"
-          d:Width="537"
-          Margin="0,0,0,0"
+          Height="380"
+          Width="537"
+          Margin="0"
           VerticalAlignment="Stretch"
           HorizontalAlignment="Stretch">
-            <Grid x:Name="CardCanvasGrid"
-              d:Height="380"
-              d:Width="537"
-              Margin="0,0,0,0"
-              Background="White"
-              VerticalAlignment="Stretch"
-              HorizontalAlignment="Stretch">
-        </Grid>
+
+        <!-- 描画領域（WPF InkCanvasは置換し、Win2Dホストをここへ配置する） -->
+        <Border x:Name="CardCanvasGrid"
+                Margin="0"
+                Background="White"
+                VerticalAlignment="Stretch"
+                HorizontalAlignment="Stretch">
+
+            <Grid>
+                <!-- DXGI SwapChain表示 -->
+                <win2dhost:DxSwapChainHost x:Name="DxHost"
+                                          Height="380"
+                                          Width="537"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch" />
+
+                <!-- 入力取得レイヤ（HwndHostが領域を埋めない場合のドラッグ開始を補完） -->
+                <Border x:Name="InputCaptureLayer"
+                        Background="Transparent"
+                        Panel.ZIndex="100"
+                        MouseLeftButtonDown="InputCaptureLayer_MouseLeftButtonDown"
+                        MouseMove="InputCaptureLayer_MouseMove"
+                        MouseLeftButtonUp="InputCaptureLayer_MouseLeftButtonUp" />
+            </Grid>
+        </Border>
     </Grid>
+
     <Window.Effect>
         <DropShadowEffect BlurRadius="15"
                           ShadowDepth="10"
@@ -228,5 +249,4 @@
                           Color="Black"
                           Opacity="0.6" />
     </Window.Effect>
-        
 </Window>
