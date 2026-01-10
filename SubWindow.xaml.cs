@@ -17,6 +17,9 @@ using ModernWpf.Controls;
 using static BrainCard.Values;
 using forms = System.Windows.Forms;
 using BrainCard.Overlay;
+using SkiaSharp;
+using SkiaSharp.Views.Desktop;
+using SkiaSharp.Views.WPF;
 
 namespace BrainCard
 {
@@ -120,6 +123,9 @@ namespace BrainCard
             {
                 SyncOverlayWindowBounds();
                 QueueOverlaySync();
+
+                // Skia側も再描画
+                SkiaElement?.InvalidateVisual();
             };
             IsVisibleChanged += (_, __) =>
             {
@@ -134,9 +140,10 @@ namespace BrainCard
 
             SourceInitialized += SubWindow_SourceInitialized;
 
-            DxHost.PointerDown += DxHost_PointerDown;
-            DxHost.PointerMove += DxHost_PointerMove;
-            DxHost.PointerUp += DxHost_PointerUp;
+            // Win2Dホストは当面不使用（Skia置換）
+            // DxHost.PointerDown += DxHost_PointerDown;
+            // DxHost.PointerMove += DxHost_PointerMove;
+            // DxHost.PointerUp += DxHost_PointerUp;
         }
 
         private void SubWindow_Unloaded(object sender, RoutedEventArgs e)
@@ -158,10 +165,10 @@ namespace BrainCard
             splitView = subwindow.Template.FindName("InkToolbarSplitView", subwindow) as SplitView;
             inkToolbarToggleButton = subwindow.Template.FindName("inkToolbarToggleButton", subwindow) as ToggleButton;
 
-            // 初回表示時に1フレーム描画を促す（SwapChainホスト側がBuildWindowCoreで描画するが保険）
+            // 初回表示時にSkia描画を促す
             try
             {
-                DxHost?.Render();
+                SkiaElement?.InvalidateVisual();
             }
             catch
             {
@@ -326,7 +333,7 @@ namespace BrainCard
 
             try
             {
-                DxHost?.Render();
+                SkiaElement?.InvalidateVisual();
             }
             catch
             {
@@ -356,6 +363,7 @@ namespace BrainCard
 
         public ImageSource CaputureCanvas()
         {
+            // Skia表示はWPF要素上に描画されるためCardCanvasGridをレンダリングすればよい
             var rtb = new RenderTargetBitmap(
                 (int)Math.Max(1, CardCanvasGrid.ActualWidth),
                 (int)Math.Max(1, CardCanvasGrid.ActualHeight),
@@ -498,18 +506,8 @@ namespace BrainCard
 
         private Point ToCardCanvasGridPoint(Point dxHostPoint)
         {
-            try
-            {
-                // DxHost上のDIP座標をSubWindow内座標へ
-                var windowPt = DxHost.TranslatePoint(dxHostPoint, this);
-                // SubWindow内座標をCardCanvasGrid内座標へ
-                var gridPt = this.TranslatePoint(windowPt, CardCanvasGrid);
-                return gridPt;
-            }
-            catch
-            {
-                return dxHostPoint;
-            }
+            // Skia置換でDxHostは存在しないため、座標変換は不要（入力はCardCanvasGrid基準で取得する）
+            return dxHostPoint;
         }
 
         private bool _isInputCaptured;
@@ -583,58 +581,10 @@ namespace BrainCard
             e.Handled = true;
         }
 
-        private void DxHost_PointerDown(object sender, Win2DHost.HostPointerEventArgs e)
-        {
-            // InputCaptureLayer側で処理するため補助扱い（将来ペン対応などで使う可能性あり）
-            if (_isInputCaptured) return;
-
-            CloseToolbarPaneIfOpen();
-
-            _isCollecting = true;
-            _currentStroke.Clear();
-            _currentStroke.Add(ToCardCanvasGridPoint(e.Position));
-
-            UpdateOverlay();
-
-            Debug.WriteLine($"[Input] Down: p={e.Position} count={_currentStroke.Count}");
-        }
-
-        private void DxHost_PointerMove(object sender, Win2DHost.HostPointerEventArgs e)
-        {
-            if (_isInputCaptured) return;
-            if (!_isCollecting) return;
-
-            var p = ToCardCanvasGridPoint(e.Position);
-            if (ShouldAppendPoint(_currentStroke, p, MinDistanceDip))
-            {
-                _currentStroke.Add(p);
-                UpdateOverlay();
-
-                Debug.WriteLine($"[Input] Move: p={p} count={_currentStroke.Count}");
-            }
-        }
-
-        private void DxHost_PointerUp(object sender, Win2DHost.HostPointerEventArgs e)
-        {
-            if (_isInputCaptured) return;
-            if (!_isCollecting) return;
-
-            _isCollecting = false;
-
-            var p = ToCardCanvasGridPoint(e.Position);
-            if (_currentStroke.Count == 0)
-            {
-                _currentStroke.Add(p);
-            }
-
-            _strokes.Add(new List<Point>(_currentStroke));
-            var v2 = MapToV2Stroke(_currentStroke);
-            _v2Strokes.Add(v2);
-
-            UpdateOverlay();
-
-            Debug.WriteLine($"[Input] Up: p={p} strokePoints={_currentStroke.Count} totalStrokes={_strokes.Count} v2Strokes={_v2Strokes.Count}");
-        }
+        // DxHost_* はWin2Dホスト用。Skia移行中は未使用のため除外。
+        // private void DxHost_PointerDown(object sender, Win2DHost.HostPointerEventArgs e) { }
+        // private void DxHost_PointerMove(object sender, Win2DHost.HostPointerEventArgs e) { }
+        // private void DxHost_PointerUp(object sender, Win2DHost.HostPointerEventArgs e) { }
 
         public void CanvasClear()
         {
@@ -649,7 +599,7 @@ namespace BrainCard
 
             try
             {
-                DxHost?.Render();
+                SkiaElement?.InvalidateVisual();
             }
             catch
             {
@@ -716,10 +666,35 @@ namespace BrainCard
 
         private void UpdateOverlay()
         {
-            // HwndHostのAirspace問題によりWPF Canvas重ね描画は見えないため、別Windowへ描画する
-            EnsureStrokeOverlayWindow();
-            SyncOverlayWindowBounds();
-            UpdateStrokeOverlayWindow();
+            // Skiaへ移行するため、オーバーレイWindowでの描画は当面停止
+            // （必要になったら削除か、Skia描画へ統合する）
+            try
+            {
+                SkiaElement?.InvalidateVisual();
+            }
+            catch
+            {
+            }
+        }
+
+        private void SkiaElement_PaintSurface(object sender, SKPaintSurfaceEventArgs e)
+        {
+            var canvas = e.Surface.Canvas;
+            canvas.Clear(SKColors.White);
+
+            using var paint = new SKPaint
+            {
+                IsAntialias = true,
+                Color = SKColors.LightGray,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = 2
+            };
+
+            // テスト用フレーム（描画が動作していることを目視確認するため）
+            var rect = new SKRect(1, 1, e.Info.Width - 2, e.Info.Height - 2);
+            canvas.DrawRect(rect, paint);
+
+            // TODO: 次ステップで_strokes/_currentStrokeを描画する
         }
     }
 }

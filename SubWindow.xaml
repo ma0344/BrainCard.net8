@@ -7,6 +7,7 @@
         xmlns:ui="http://schemas.modernwpf.com/2019"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         xmlns:win2dhost="clr-namespace:BrainCard.Win2DHost"
+        xmlns:skia="clr-namespace:SkiaSharp.Views.WPF;assembly=SkiaSharp.Views.WPF"
         mc:Ignorable="d"
         ui:WindowHelper.UseModernWindowStyle="True"
         ui:TitleBar.ExtendViewIntoTitleBar="True"
@@ -216,7 +217,7 @@
           VerticalAlignment="Stretch"
           HorizontalAlignment="Stretch">
 
-        <!-- 描画領域（WPF InkCanvasは置換し、Win2Dホストをここへ配置する） -->
+        <!-- 描画領域 -->
         <Border x:Name="CardCanvasGrid"
                 Margin="0"
                 Background="White"
@@ -224,14 +225,13 @@
                 HorizontalAlignment="Stretch">
 
             <Grid>
-                <!-- DXGI SwapChain表示 -->
-                <win2dhost:DxSwapChainHost x:Name="DxHost"
-                                          Height="380"
-                                          Width="537"
-                                          HorizontalAlignment="Stretch"
-                                          VerticalAlignment="Stretch" />
+                <!-- Skia描画（WPFコントロールなのでAirspace問題なし） -->
+                <skia:SKElement x:Name="SkiaElement"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch"
+                                PaintSurface="SkiaElement_PaintSurface" />
 
-                <!-- 入力取得レイヤ（HwndHostが領域を埋めない場合のドラッグ開始を補完） -->
+                <!-- 入力取得レイヤ（Skiaの上に被せる） -->
                 <Border x:Name="InputCaptureLayer"
                         Background="Transparent"
                         Panel.ZIndex="100"
