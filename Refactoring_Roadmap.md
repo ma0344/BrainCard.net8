@@ -57,7 +57,7 @@
 
 4. ? **新データモデルを追加する**
    - ✅ v2用データクラス（ファイル/カード/ストローク/点）を追加する
-   - ? JSONシリアライズ/デシリアライズ方法を確定する（Newtonsoft継続）
+   - ✅ JSONシリアライズ/デシリアライズ方法を確定する（Newtonsoft継続）
 
 5. ✅ **SkiaSharpでの最小入力と描画を成立させる**
    - ✅ SubWindow 上に `SKElement` をホストできるようにする `docs/issues/ISSUE-SKIA-005-01-host-in-subwindow.md`
@@ -69,10 +69,11 @@
    - ✅ PNGを **537x380px固定**で生成できるようにする `docs/issues/ISSUE-SKIA-005-04-png-generation.md`
    - ✅ 空ストロークのカードを作成しない（新規は追加しない／編集は削除確認）
 
-7. **新形式（v2）の保存/読込経路を追加する**
-   - v2ファイル読み込み処理を追加する `docs/issues/ISSUE-SKIA-007-01-v2-read.md`
-   - v2ファイル保存処理を追加する `docs/issues/ISSUE-SKIA-007-02-v2-save.md`
+7. ✅ **新形式（v2）の保存/読込経路を追加する**
+   - ✅ v2ファイル読み込み処理を追加する `docs/issues/ISSUE-SKIA-007-01-v2-read.md`
+   - ✅ v2ファイル保存処理を追加する `docs/issues/ISSUE-SKIA-007-02-v2-save.md`
    - `Assets`（PNGキャッシュ）フォルダ運用を継続する
+   - ✅ SaveAsで既存ファイルに保存した場合のAssets残留をクリーンアップする `docs/issues/ISSUE-SKIA-007-03-clean-assets-on-save.md`
 
 8. **保存時に新拡張子へ強制する**
    - 旧拡張子（`.bcf`）での保存・上書きを禁止する `docs/issues/ISSUE-SKIA-008-01-force-bcf2-save.md`

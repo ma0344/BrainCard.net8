@@ -24,3 +24,14 @@
 - manual:
   1. `.bcf2` を指定してロード
   2. 例外が未処理で落ちない（ログ/メッセージで確認できる）
+
+## Status
+- Closed
+
+## Implementation Notes
+- `MainWindow.xaml.cs`: `LoadBcf2DocumentAsync` を追加（`.bcf2`→`Bcf2Document`）
+- `MainWindow.xaml.cs`: `ValidateBcf2Document` を追加（format/version/cards null、card.id必須の最小チェック）
+
+## Validation Results
+- build: `dotnet build` (pass)
+- manual: 壊れたJSONの `.bcf2` で未処理例外により落ちないことを確認（007-01-04でユーザー通知も追加）

@@ -25,3 +25,15 @@
 - manual:
   1. 既存の`.bcf2`をロード
   2. `<file>.Assets`のPNGが表示され、位置が復元される
+
+## Status
+- Closed
+
+## Implementation Notes
+- `MainWindow.xaml.cs`: `.bcf2` ロード時に `Bcf2Document.cards` から `Card` を復元
+- PNGが無いカードは暫定でスキップ（後段で生成）
+- `Bcf2Card.ink.strokes` は `Card.SetV2Strokes(...)` で保持（描画はしない）
+
+## Validation Results
+- build: `dotnet build` (pass)
+- manual: 全てのカードが元の配置で復元されることを確認

@@ -22,3 +22,14 @@
 - manual:
   1. 大きめの`.bcf2`読込でオーバーレイが出る
   2. 壊れたJSONの`.bcf2`で失敗表示が出る
+
+## Status
+- Closed
+
+## Implementation Notes
+- `MainWindow.xaml.cs`: ロード失敗時の `throw` を抑止し、ステータスバーへ「読み込みに失敗しました。」を表示
+- `MainWindow.xaml.cs`: v2デシリアライズ/検証失敗を `InvalidDataException` にラップして原因切り分けしやすくした
+
+## Validation Results
+- build: `dotnet build` (pass)
+- manual: 意図的に破損させた `.bcf2`（後半を削除）でもアプリが落ちず、ステータスバーに失敗が表示されることを確認

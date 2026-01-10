@@ -24,3 +24,14 @@
 - manual:
   1. ロードダイアログで`.bcf2`が選択できる
   2. `.bcf`も従来通り選択できる
+
+## Status
+- Closed
+
+## Implementation Notes
+- `MainWindow.xaml.cs`: `OpenFileDialog` のFilterを `.bcf2`/`.bcf` 両対応に更新
+- `MainWindow.xaml.cs`: `LoadStateAsync` で拡張子分岐を追加（`.bcf2`→v2、`.bcf`→legacy）
+
+## Validation Results
+- build: `dotnet build` (pass)
+- manual: Loadダイアログで `.bcf2`/`.bcf` が選択できることを確認

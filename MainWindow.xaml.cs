@@ -179,7 +179,8 @@ namespace BrainCard
                     {
                         // 例外はデバッグ出力に残す（切り分け用）
                         Debug.WriteLine($"[Overray] LoadStateAsync failed (startup): {ex}");
-                        throw;
+                        StatusBarMessageTextBlock.Text = "読み込みに失敗しました。";
+                        StatusbarTimer_start();
                     }
                 }, DispatcherPriority.Background);
             }
@@ -942,12 +943,18 @@ namespace BrainCard
                     }
                 };
 
+                // 期待するPNGファイル名一覧（Assets直下）
+                var expectedPngFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
                 foreach (var card in CardList)
                 {
                     if (card == null) continue;
 
                     var cardId = string.IsNullOrWhiteSpace(card.Id) ? Guid.NewGuid().ToString("N") : card.Id;
                     card.Id = cardId;
+
+                    var expectedFileName = $"{cardId}.png";
+                    expectedPngFileNames.Add(expectedFileName);
 
                     // preview PNG を Assets に保存（失敗してもJSON保存は継続）
                     try
@@ -970,12 +977,40 @@ namespace BrainCard
                         Y = card.Top,
                         Z = card.Z,
                         RecognizedText = card.RecognizedText,
-                        PreviewPng = $"{cardId}.png",
+                        PreviewPng = expectedFileName,
                         Ink = new Bcf2InkData
                         {
                             Strokes = card.V2Strokes?.ToList() ?? new List<Bcf2Stroke>()
                         }
                     });
+                }
+
+                // SaveAsで既存ファイルに保存した場合に古いPNGが残るため、Assets直下の不要pngを削除する
+                try
+                {
+                    var assetsDir = GetAssetsDirectory(filename);
+                    if (!string.IsNullOrWhiteSpace(assetsDir) && Directory.Exists(assetsDir))
+                    {
+                        foreach (var path in Directory.EnumerateFiles(assetsDir, "*.png", SearchOption.TopDirectoryOnly))
+                        {
+                            var fileName = Path.GetFileName(path);
+                            if (!expectedPngFileNames.Contains(fileName))
+                            {
+                                try
+                                {
+                                    File.Delete(path);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.WriteLine($"[Save] Delete stale png skipped: path={path} ex={ex}");
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[Save] Cleanup stale png failed: {ex}");
                 }
 
                 var dir = Path.GetDirectoryName(filename);
@@ -1003,7 +1038,8 @@ namespace BrainCard
         {
             var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
-                Filter = "Brain Card files (*.bcf)|*.bcf"
+                Filter = "Brain Card v2 files (*.bcf2)|*.bcf2|Brain Card files (*.bcf)|*.bcf",
+                DefaultExt = ".bcf2"
             };
 
             if (openFileDialog.ShowDialog() == true)
@@ -1021,7 +1057,8 @@ namespace BrainCard
                 {
                     // 例外はデバッグ出力に残す（切り分け用）
                     Debug.WriteLine($"[Overray] LoadStateAsync failed (open): {ex}");
-                    throw;
+                    StatusBarMessageTextBlock.Text = "読み込みに失敗しました。";
+                    StatusbarTimer_start();
                 }
             }
         }
@@ -1030,7 +1067,159 @@ namespace BrainCard
         private Task LoadStateAsync(string filename)
         {
             // UIイベントからも呼べるよう、例外を握りつぶさずTaskとして返す
+            if (string.IsNullOrWhiteSpace(filename))
+            {
+                return Task.CompletedTask;
+            }
+
+            var ext = Path.GetExtension(filename);
+            if (string.Equals(ext, ".bcf2", StringComparison.OrdinalIgnoreCase))
+            {
+                return LoadStateV2Async(filename);
+            }
+
+            // default: legacy
             return LoadStateCoreAsync(filename);
+        }
+
+        private async Task LoadStateV2Async(string filename)
+        {
+            // NOTE: UI復元はISSUE-SKIA-007-01-03で実装する。
+            Bcf2Document doc;
+            try
+            {
+                doc = await LoadBcf2DocumentAsync(filename);
+                ValidateBcf2Document(doc);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidDataException($"v2ファイルの読み込みに失敗しました: {Path.GetFileName(filename)}", ex);
+            }
+
+            await _loadSemaphore.WaitAsync();
+            SetLoadingUi(true, "LoadingMessage");
+
+            if (vm != null)
+            {
+                vm.LoadingCurrent = 0;
+                vm.LoadingTotal = doc.Cards?.Count ?? 0;
+            }
+
+            try
+            {
+                try
+                {
+                    OverrayGrid?.UpdateLayout();
+                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+                }
+                catch
+                {
+                }
+
+                if (vm != null)
+                {
+                    vm.CurrentFileName = filename;
+                    vm.IsNewFile = false;
+                }
+
+                currentZIndex = 0;
+                lastImagePositionLeft = 0;
+                lastImagePositionTop = 0;
+                CardList.Clear();
+                MainCanvas.Children.Clear();
+
+                if (doc.Cards == null) return;
+
+                var i = 0;
+                foreach (var v2Card in doc.Cards)
+                {
+                    i++;
+                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+
+                    if (vm != null)
+                    {
+                        vm.LoadingCurrent = Math.Min(i, vm.LoadingTotal);
+                    }
+
+                    if (v2Card == null) continue;
+
+                    var cardId = v2Card.Id;
+                    if (string.IsNullOrWhiteSpace(cardId))
+                    {
+                        continue;
+                    }
+
+                    // previewPngはAssets直下の相対パス想定。無い/不正なら cardId.png を使う。
+                    var previewFileName = string.IsNullOrWhiteSpace(v2Card.PreviewPng)
+                        ? $"{cardId}.png"
+                        : v2Card.PreviewPng;
+
+                    // 現状はルート直下のみ許可（パストラバーサル回避）
+                    previewFileName = Path.GetFileName(previewFileName);
+
+                    var assetsDir = GetAssetsDirectory(filename);
+                    var pngPath = string.IsNullOrWhiteSpace(assetsDir)
+                        ? null
+                        : Path.Combine(assetsDir, previewFileName);
+
+                    // フォールバック: 既存ヘルパー（<id>.png）
+//                    pngPath ??= GetCardPngPath(filename, cardId);
+
+                    ImageSource imageSource = TryLoadPng(pngPath);
+
+                    // 仕様: PNGキャッシュが無いカードは読み込まない（後段で生成）
+//                    if (imageSource == null)
+//                    {
+//                        continue;
+//                    }
+
+                    var card = new Card(this, inkCanvas: null, imageSource);
+                    card.Id = cardId;
+                    card.Left = v2Card.X;
+                    card.Top = v2Card.Y;
+                    card.Z = v2Card.Z;
+                    card.SetText(v2Card.RecognizedText);
+
+                    if (v2Card.Ink?.Strokes != null)
+                    {
+                        card.SetV2Strokes(v2Card.Ink.Strokes);
+                    }
+
+                    Canvas.SetLeft(card, card.Left);
+                    Canvas.SetTop(card, card.Top);
+                    Canvas.SetZIndex(card, card.Z);
+
+                    card.CardClicked += Card_Clicked;
+                    card.CardSelected += Card_CardSelected;
+                    card.CardDraging += Card_CardDraging;
+                    card.EditRequested += Card_EditRequested;
+                    card.DeleteRequested += Card_DeleteRequested;
+                    card.CardDragCompleated += Card_CardDragCompleated;
+
+                    MainCanvas.Children.Add(card);
+                    CardList.Add(card);
+                    currentZIndex = Math.Max(currentZIndex, card.Z + 1);
+
+                    // v2 strokesは次ステップで保持（UI描画はしない）
+                }
+
+                UpdateZIndex();
+                MainCanvas.InvalidateVisual();
+                CardsLoaded?.Invoke(this, EventArgs.Empty);
+                subWindow.CanvasClear();
+            }
+            finally
+            {
+                SetLoadingUi(false);
+
+                if (vm != null)
+                {
+                    vm.LoadingCurrent = 0;
+                    vm.LoadingTotal = 0;
+                }
+
+                _loadSemaphore.Release();
+            }
         }
 
         // 実体のロード処理（await前提）
@@ -1113,7 +1302,7 @@ namespace BrainCard
                     var card = new Card(this, inkCanvas: null, imageSource);
                     card.Id = savedImage.Id;
                     card.Left = savedImage.X;
-                    card.Top = savedImage.Y;
+                    card.Top = 0;
                     card.Z = savedImage.Z;
                     card.SetText(savedImage.RecogText);
 
@@ -1485,6 +1674,56 @@ namespace BrainCard
             catch
             {
                 // ログ出力失敗は機能に影響させない
+            }
+        }
+
+        private static async Task<Bcf2Document> LoadBcf2DocumentAsync(string filename)
+        {
+            if (string.IsNullOrWhiteSpace(filename))
+                throw new ArgumentException("filename is null or empty.", nameof(filename));
+
+            if (!File.Exists(filename))
+                throw new FileNotFoundException("bcf2 file not found.", filename);
+
+            var json = await File.ReadAllTextAsync(filename).ConfigureAwait(false);
+
+            Bcf2Document doc;
+            try
+            {
+                doc = JsonConvert.DeserializeObject<Bcf2Document>(json);
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidDataException("Invalid .bcf2 JSON.", ex);
+            }
+
+            if (doc == null)
+                throw new InvalidDataException("Invalid .bcf2 content (null document).");
+
+            return doc;
+        }
+
+        private static void ValidateBcf2Document(Bcf2Document doc)
+        {
+            if (doc == null) throw new ArgumentNullException(nameof(doc));
+
+            if (!string.Equals(doc.Format, "BrainCard", StringComparison.Ordinal))
+                throw new InvalidDataException($"Unsupported .bcf2 format: '{doc.Format}'. Expected 'BrainCard'.");
+
+            if (doc.Version != 2)
+                throw new InvalidDataException($"Unsupported .bcf2 version: {doc.Version}. Expected 2.");
+
+            if (doc.Cards == null)
+                throw new InvalidDataException("Invalid .bcf2 content (cards is null).");
+
+            // card-level minimal validation (avoid failing on empty doc)
+            foreach (var c in doc.Cards)
+            {
+                if (c == null)
+                    throw new InvalidDataException("Invalid .bcf2 content (card is null).");
+
+                if (string.IsNullOrWhiteSpace(c.Id))
+                    throw new InvalidDataException("Invalid .bcf2 content (card.id is null or empty).");
             }
         }
 
@@ -1979,8 +2218,6 @@ namespace BrainCard
 
         [DataMember]
         public double X { get; set; }
-        [DataMember]
-        public double Y { get; set; }
         [DataMember]
         public int Z { get; set; }
         [DataMember]

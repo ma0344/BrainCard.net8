@@ -44,3 +44,18 @@
 ## Risks
 - v2モデル未整備 - 最小のルートモデルを追加/補完して対応
 - PNGキャッシュ不在 - スキップ方針を明記し、後段で生成対応
+
+## Status
+- Closed
+
+## Child Issue Status
+- Closed: ISSUE-SKIA-007-01-01-open-dialog
+- Closed: ISSUE-SKIA-007-01-02-deserialize
+- Closed: ISSUE-SKIA-007-01-03-restore-cards
+- Closed: ISSUE-SKIA-007-01-04-load-ui
+
+## Validation Results
+- build: `dotnet build` (pass)
+- manual:
+  - `.bcf2` ロードでPNGがあるカードが復元されることを確認
+  - 破損 `.bcf2` ロードでもクラッシュせず失敗表示されることを確認
