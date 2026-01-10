@@ -1,4 +1,5 @@
 ﻿using BrainCard.ViewModels;
+using BrainCard.Models.FileFormatV2;
 using ModernWpf;
 using Newtonsoft.Json;
 using System;
@@ -246,7 +247,7 @@ namespace BrainCard
 
             DeselectCard();
             CardsListView.SelectedItem = null;
-            if(HamburgerMenuPin.IsChecked != true)
+            if (HamburgerMenuPin.IsChecked != true)
             {
                 SplitView.IsPaneOpen = false;
                 MainScrollViewer.Margin = new Thickness(0);
@@ -324,7 +325,7 @@ namespace BrainCard
         }
 
         // カード : カードをメインキャンバスに追加
-        #if BRAIN_CARD_DISABLE_XAML_ISLANDS
+#if BRAIN_CARD_DISABLE_XAML_ISLANDS
         public Card AddCard(object customInkCanvas, ImageSource imageSource, string recogText, double positionLeft = double.NaN, double positionTop = double.NaN, AddMode addMode = AddMode.Cleate)
         {
             if (double.IsNaN(lastImagePositionLeft)) lastImagePositionLeft = 0;
@@ -354,7 +355,7 @@ namespace BrainCard
             lastImagePositionLeft += 20;
             return card;
         }
-        #else
+#else
         public Card AddCard(CustomInkCanvas customInkCanvas, ImageSource imageSource, string recogText, double positionLeft = double.NaN, double positionTop = double.NaN, AddMode addMode = AddMode.Cleate)
         {
             if (double.IsNaN(lastImagePositionLeft)) lastImagePositionLeft = 0;
@@ -415,7 +416,7 @@ namespace BrainCard
             lastImagePositionLeft += 20; // Add a margin of 10 between images
             return card;
         }
-        #endif
+#endif
 
         private void Card_CardDragCompleated(object sender, EventArgs e)
         {
@@ -462,7 +463,7 @@ namespace BrainCard
                 currentCard.Effect = cardEffect;
                 currentCard.CardBorder.BorderBrush = new SolidColorBrush(Colors.Transparent);
 
-                if(SelectedCardShowTopToggleSwitch.IsOn) currentCard.Z = selectedCardZIndex;
+                if (SelectedCardShowTopToggleSwitch.IsOn) currentCard.Z = selectedCardZIndex;
                 currentCard = null;
 
             }
@@ -481,7 +482,7 @@ namespace BrainCard
                 card.CardBorder.BorderThickness = new Thickness(1);
                 card.CardBorder.Margin = new Thickness(-1);
                 currentCard = card;
-                if(SelectedCardShowTopToggleSwitch.IsOn) currentCard.Z = 9999;
+                if (SelectedCardShowTopToggleSwitch.IsOn) currentCard.Z = 9999;
             }
         }
 
@@ -524,7 +525,7 @@ namespace BrainCard
 
             subWindow.Left = (cardCenterPos.X) - (subWindow.ContentRootGrid.Width / 2);
             subWindow.Top = (cardCenterPos.Y) - (subWindow.ContentRootGrid.Height / 2) - (titlebarHeight);
-            
+
             card.Visibility = Visibility.Hidden;
         }
 
@@ -607,7 +608,7 @@ namespace BrainCard
             var card = sender as Card;
             if (HamburgerMenuPin.IsChecked != true)
                 //HamburgerMenu.IsChecked = false;
-            CurrentCard_Change(card);
+                CurrentCard_Change(card);
             CardsListView.SelectedItem = card;
         }
 
@@ -837,9 +838,10 @@ namespace BrainCard
             var count = CardList.Count - 1;
             for (int i = 0; i < CardList.Count; i++)
             {
-                if(CardsListView.Items[i] is Card card)
+                if (CardsListView.Items[i] is Card card)
                 {
-                    if(card.Z == 9999) {
+                    if (card.Z == 9999)
+                    {
                         selectedCardZIndex = i;
                     }
                     card.Z = i;
@@ -849,8 +851,8 @@ namespace BrainCard
             }
             if (SelectedCardShowTopToggleSwitch.IsOn)
             {
-               var card = CardList.FirstOrDefault(c => c.Z==selectedCardZIndex) as Card;
-                   card.Z = 9999;
+                var card = CardList.FirstOrDefault(c => c.Z == selectedCardZIndex) as Card;
+                card.Z = 9999;
             }
             //SortCardListByZIndex();
             CardsListView.InvalidateVisual();
@@ -877,7 +879,9 @@ namespace BrainCard
             var saveFileDialog = new Microsoft.Win32.SaveFileDialog
             {
                 FileName = vm?.CurrentFileName,
-                Filter = "Brain Card files (*.bcf)|*.bcf"
+                Filter = "Brain Card v2 files (*.bcf2)|*.bcf2|Brain Card files (*.bcf)|*.bcf",
+                DefaultExt = ".bcf2",
+                AddExtension = true
             };
 
             if (saveFileDialog.ShowDialog() == true)
@@ -892,7 +896,7 @@ namespace BrainCard
             }
 
         }
- 
+
         private void SaveDropDown_Click(ui.SplitButton sender, ui.SplitButtonClickEventArgs args)
         {
             OverWrite_Click(sender, new RoutedEventArgs());
@@ -917,33 +921,82 @@ namespace BrainCard
         // SplitView : セーブボタン : 現在の状態を保存します。
         private void SaveState(string filename)
         {
-            // 仕様: 保存は諸々が揃ってから実装する（現時点ではボタンのみ有効）。
             if (string.IsNullOrWhiteSpace(filename)) return;
 
-            if (vm != null)
+            try
             {
-                vm.CurrentFileName = filename;
-                vm.IsNewFile = false;
+                if (vm != null)
+                {
+                    vm.CurrentFileName = filename;
+                    vm.IsNewFile = false;
+                }
+
+                var doc = new Bcf2Document
+                {
+                    CreatedUtc = DateTime.UtcNow.ToString("O"),
+                    Canvas = new Bcf2CanvasInfo
+                    {
+                        Width = cardWidth,
+                        Height = cardHeight,
+                        Dpi = 96
+                    }
+                };
+
+                foreach (var card in CardList)
+                {
+                    if (card == null) continue;
+
+                    var cardId = string.IsNullOrWhiteSpace(card.Id) ? Guid.NewGuid().ToString("N") : card.Id;
+                    card.Id = cardId;
+
+                    // preview PNG を Assets に保存（失敗してもJSON保存は継続）
+                    try
+                    {
+                        if (card.CardImage?.Source is BitmapSource bmp)
+                        {
+                            var pngPath = GetCardPngPath(filename, cardId);
+                            SavePng(pngPath, bmp);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[Save] SavePng skipped: cardId={cardId} ex={ex}");
+                    }
+
+                    doc.Cards.Add(new Bcf2Card
+                    {
+                        Id = cardId,
+                        X = card.Left,
+                        Y = card.Top,
+                        Z = card.Z,
+                        RecognizedText = card.RecognizedText,
+                        PreviewPng = $"{cardId}.png",
+                        Ink = new Bcf2InkData
+                        {
+                            Strokes = card.V2Strokes?.ToList() ?? new List<Bcf2Stroke>()
+                        }
+                    });
+                }
+
+                var dir = Path.GetDirectoryName(filename);
+                if (!string.IsNullOrWhiteSpace(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+
+                var json = JsonConvert.SerializeObject(doc, Formatting.Indented);
+                File.WriteAllText(filename, json);
+
+                StatusBarMessageTextBlock.Text = "v2形式で保存しました。";
+                StatusbarTimer_start();
             }
-
-            StatusBarMessageTextBlock.Text = "（未実装）保存は現在無効です。";
-            StatusbarTimer_start();
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Save] SaveState failed: {ex}");
+                StatusBarMessageTextBlock.Text = "保存に失敗しました。";
+                StatusbarTimer_start();
+            }
         }
-
-        // SplitView : セーブボタン : InkPresenterをJson文字列に変換
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
-        private async Task<string> SerializeStrokes(Windows.UI.Input.Inking.InkPresenter presenter)
-        {
-            var container = presenter.StrokeContainer;
-            using MemoryStream ms = new MemoryStream();
-            using IRandomAccessStream stream = ms.AsRandomAccessStream();
-            await container.SaveAsync(stream);
-            var isf = ms.ToArray();
-            // StrokeCollectionData を JSON にシリアライズ
-            string json = JsonConvert.SerializeObject(isf);
-            return json;
-        }
-#endif
 
         // SplitView : ロードボタン : クリックしたときの処理
         private async void LoadButton_Click(object sender, RoutedEventArgs e)
@@ -960,18 +1013,18 @@ namespace BrainCard
                     vm.CurrentFileName = openFileDialog.FileName;
                     vm.IsNewFile = false;
                 }
-                 try
-                 {
-                     await LoadStateAsync(openFileDialog.FileName);
-                 }
-                 catch (Exception ex)
-                 {
-                     // 例外はデバッグ出力に残す（切り分け用）
-                     Debug.WriteLine($"[Overray] LoadStateAsync failed (open): {ex}");
-                     throw;
-                 }
-             }
-         }
+                try
+                {
+                    await LoadStateAsync(openFileDialog.FileName);
+                }
+                catch (Exception ex)
+                {
+                    // 例外はデバッグ出力に残す（切り分け用）
+                    Debug.WriteLine($"[Overray] LoadStateAsync failed (open): {ex}");
+                    throw;
+                }
+            }
+        }
 
         // SplitView : ロードボタン : 保存した状態をロードします。
         private Task LoadStateAsync(string filename)
@@ -1231,9 +1284,9 @@ namespace BrainCard
             if (CardList is null) return;
             foreach (var card in CardList)
             {
-                if(card.ContextMenu is ContextMenu menu)
+                if (card.ContextMenu is ContextMenu menu)
                 {
-                    foreach(MenuItem item in menu.Items)
+                    foreach (MenuItem item in menu.Items)
                     {
                         switch (item.Name)
                         {
@@ -1248,7 +1301,7 @@ namespace BrainCard
                     }
                 }
             }
-            
+
             foreach (var listItem in CardsListView.Items)
             {
                 if (listItem is ListViewItem listitem)
@@ -1269,11 +1322,11 @@ namespace BrainCard
                             }
                         }
                     }
-                    
+
                 }
             }
             CardsListView.Items.Refresh();
-            
+
             // 各コントロールのプロパティを更新
             // 例：
             //BackButton.Content = Properties.Resources.BackButtonContent;
@@ -1353,7 +1406,7 @@ namespace BrainCard
                         break;
                 }
 
-                if(currentCard != null && slider.Name != "ImageScaleSlider")
+                if (currentCard != null && slider.Name != "ImageScaleSlider")
                     SelectCard(currentCard);
             }
             e.Handled = true;
@@ -1366,9 +1419,9 @@ namespace BrainCard
                 var step = slider.LargeChange;
                 if (currentCard != null && slider.Name != "ImageScaleSlider") SelectCard(currentCard);
                 if (e.Delta > 0)
-                        slider.Value += step * e.Delta / 120;
+                    slider.Value += step * e.Delta / 120;
                 else
-                        slider.Value += step * e.Delta / 120;
+                    slider.Value += step * e.Delta / 120;
             }
             e.Handled = true;
         }
@@ -1391,7 +1444,7 @@ namespace BrainCard
             {
                 // ログ出力失敗は機能に影響させない
             }
- 
+
             vm.IsLoading = isLoading;
             if (!string.IsNullOrWhiteSpace(messageResourceKey))
             {
@@ -1493,296 +1546,296 @@ namespace BrainCard
             return foundChild;
         }
 
-    // ヘルパーメソッド : ステータスバーメッセージ消去用タイマー
-    private void StatusbarTimer_start(int interval = 5)
-    {
-        StatusBarMessageClearTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(interval) };
-        StatusBarMessageClearTimer.Tick += StatusBarMessageClearTimer_Tick;
-        StatusBarMessageClearTimer.Start();
-    }
-    private void StatusBarMessageClearTimer_Tick(object sender, EventArgs e)
-    {
-        StatusBarMessageTextBlock.Text = "";
-        StatusBarMessageClearTimer.Stop();
-        StatusBarMessageClearTimer.Tick -= StatusBarMessageClearTimer_Tick;
-
-    }
-
-
-    // タッチ操作時の位置情報記憶用グローバル変数
-    private double initialDistance;
-    private double initialImageSliderValue;
-
-    // タッチ操作によるズーム処理
-    private void Touch_FrameReported(object sender, TouchFrameEventArgs e)
-    {
-        
-        if (e.GetTouchPoints(null).Count == 2)
+        // ヘルパーメソッド : ステータスバーメッセージ消去用タイマー
+        private void StatusbarTimer_start(int interval = 5)
         {
-            TouchPoint touchPoint1 = e.GetPrimaryTouchPoint(null);
-            TouchPoint touchPoint2 = e.GetTouchPoints(null)[1];
-            if (touchPoint1.Action == TouchAction.Down || touchPoint2.Action == TouchAction.Down)
-            {
-                // ズーム操作開始時の2点間の距離とズームスライダーの値をグローバル変数に記録
-                initialDistance = GetDistance(touchPoint1.Position, touchPoint2.Position);
-                initialImageSliderValue = ImageScaleSlider.Value;
-            }
-            else if (touchPoint1.Action == TouchAction.Move || touchPoint2.Action == TouchAction.Move)
-            {
-                // ズーム操作中の2点間の距離をグローバル変数から取得し、ズームスライダーの値を更新
-                double currentDistance = GetDistance(touchPoint1.Position, touchPoint2.Position);
-                double scale = currentDistance / initialDistance;
+            StatusBarMessageClearTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(interval) };
+            StatusBarMessageClearTimer.Tick += StatusBarMessageClearTimer_Tick;
+            StatusBarMessageClearTimer.Start();
+        }
+        private void StatusBarMessageClearTimer_Tick(object sender, EventArgs e)
+        {
+            StatusBarMessageTextBlock.Text = "";
+            StatusBarMessageClearTimer.Stop();
+            StatusBarMessageClearTimer.Tick -= StatusBarMessageClearTimer_Tick;
 
-                ImageScaleSlider.Value = initialImageSliderValue * scale;
-                
+        }
+
+
+        // タッチ操作時の位置情報記憶用グローバル変数
+        private double initialDistance;
+        private double initialImageSliderValue;
+
+        // タッチ操作によるズーム処理
+        private void Touch_FrameReported(object sender, TouchFrameEventArgs e)
+        {
+
+            if (e.GetTouchPoints(null).Count == 2)
+            {
+                TouchPoint touchPoint1 = e.GetPrimaryTouchPoint(null);
+                TouchPoint touchPoint2 = e.GetTouchPoints(null)[1];
+                if (touchPoint1.Action == TouchAction.Down || touchPoint2.Action == TouchAction.Down)
+                {
+                    // ズーム操作開始時の2点間の距離とズームスライダーの値をグローバル変数に記録
+                    initialDistance = GetDistance(touchPoint1.Position, touchPoint2.Position);
+                    initialImageSliderValue = ImageScaleSlider.Value;
+                }
+                else if (touchPoint1.Action == TouchAction.Move || touchPoint2.Action == TouchAction.Move)
+                {
+                    // ズーム操作中の2点間の距離をグローバル変数から取得し、ズームスライダーの値を更新
+                    double currentDistance = GetDistance(touchPoint1.Position, touchPoint2.Position);
+                    double scale = currentDistance / initialDistance;
+
+                    ImageScaleSlider.Value = initialImageSliderValue * scale;
+
+                }
+            }
+
+        }
+
+        // 2点間の距離を取得（指によるピンチ・ズームに使用？）
+        private double GetDistance(System.Windows.Point point1, System.Windows.Point point2)
+        {
+            double xDiff = point1.X - point2.X;
+            double yDiff = point1.Y - point2.Y;
+            return Math.Sqrt(xDiff * xDiff + yDiff * yDiff);
+        }
+
+
+        // MainWindowの背景色を変更する
+        private void ColorPicker_SelectedColorChanged(object sender, ColorChangedEventArgs e)
+        {
+            if (e.SelectedColor is Color selectedColor)
+            {
+                // 選択された色を使用して処理を行う（例：背景色を変更）
+                MainCanvasGrid.Background = new SolidColorBrush(selectedColor);
+                MainScrollViewer.Background = new SolidColorBrush(selectedColor);
             }
         }
 
-    }
-
-    // 2点間の距離を取得（指によるピンチ・ズームに使用？）
-    private double GetDistance(System.Windows.Point point1, System.Windows.Point point2)
-    {
-        double xDiff = point1.X - point2.X;
-        double yDiff = point1.Y - point2.Y;
-        return Math.Sqrt(xDiff * xDiff + yDiff * yDiff);
-    }
-
-
-    // MainWindowの背景色を変更する
-    private void ColorPicker_SelectedColorChanged(object sender, ColorChangedEventArgs e)
-    {
-        if (e.SelectedColor is Color selectedColor)
+        // カード : カードの位置を変換
+        /// <summary>
+        /// カード : カードの位置を変換
+        /// 指定されたポイントをDPIスケールに基づいて変換する役割を果たしています。
+        /// 異なるDPI設定のディスプレイ間でポイントの位置を正確に変換するために使用。
+        /// obj は、変換元のオブジェクト（MainWindow、Card、SubWindow）を指定します。
+        /// </summary>
+        /// <param name="obj"></param>
+        /// <param name="point"></param>
+        /// <returns></returns>
+        public Point ConvertDpiScaledPoint(object obj, Point point)
         {
-            // 選択された色を使用して処理を行う（例：背景色を変更）
-            MainCanvasGrid.Background = new SolidColorBrush(selectedColor);
-            MainScrollViewer.Background = new SolidColorBrush(selectedColor);
+            Window window = obj switch
+            {
+                MainWindow mainWindow => mainWindow,
+                Card _ => this,
+                SubWindow subWindow => subWindow,
+                _ => null,
+            };
+            var systemDisplayScale = VisualTreeHelper.GetDpi(window).DpiScaleX;
+            var convertedPoint = new Point(point.X / systemDisplayScale, point.Y / systemDisplayScale);
+            return convertedPoint;
         }
-    }
 
-    // カード : カードの位置を変換
-    /// <summary>
-    /// カード : カードの位置を変換
-    /// 指定されたポイントをDPIスケールに基づいて変換する役割を果たしています。
-    /// 異なるDPI設定のディスプレイ間でポイントの位置を正確に変換するために使用。
-    /// obj は、変換元のオブジェクト（MainWindow、Card、SubWindow）を指定します。
-    /// </summary>
-    /// <param name="obj"></param>
-    /// <param name="point"></param>
-    /// <returns></returns>
-    public Point ConvertDpiScaledPoint(object obj, Point point)
-    {
-        Window window = obj switch
+
+        /// <summary>
+        /// ShadowColorPickerButton の ColorChanged イベントハンドラー。
+        /// ビューモデルの ShadowColor プロパティを更新し、現在選択されているカードのビジュアルを更新します。
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void ShadowColorPickerButton_ColorChanged(object sender, ColorChangedEventArgs e)
         {
-            MainWindow mainWindow => mainWindow,
-            Card _ => this,
-            SubWindow subWindow => subWindow,
-            _ => null,
-        };
-        var systemDisplayScale = VisualTreeHelper.GetDpi(window).DpiScaleX;
-        var convertedPoint = new Point(point.X / systemDisplayScale, point.Y / systemDisplayScale);
-        return convertedPoint;
-    }
-
-
-    /// <summary>
-    /// ShadowColorPickerButton の ColorChanged イベントハンドラー。
-    /// ビューモデルの ShadowColor プロパティを更新し、現在選択されているカードのビジュアルを更新します。
-    /// </summary>
-    /// <param name="sender"></param>
-    /// <param name="e"></param>
-    private void ShadowColorPickerButton_ColorChanged(object sender, ColorChangedEventArgs e)
-    {
-        if (vm is null) return;
-        vm.ShadowColor = e.SelectedColor;
-        SelectCard(currentCard);
-    }
-
-    private void SelectedCardShowTopToggleSwitch_Toggled(object sender, RoutedEventArgs e)
-    {
-        if(currentCard is null) return;
-        if (SelectedCardShowTopToggleSwitch.IsOn)
-        {
+            if (vm is null) return;
+            vm.ShadowColor = e.SelectedColor;
             SelectCard(currentCard);
         }
-        else
+
+        private void SelectedCardShowTopToggleSwitch_Toggled(object sender, RoutedEventArgs e)
         {
-            currentCard.Z= selectedCardZIndex;
-            SelectCard(currentCard);
-        }
-    }
-
-    private void ShadowToggle_Toggled(object sender, RoutedEventArgs e)
-    {
-        if (currentCard is null) return;
-        SelectCard(currentCard);
-
-    }
-
-    private void OverrayGrid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        // ロード中は入力抑止のため何もしない
-        if (vm?.IsLoading == true) return;
-
-        if (vm.IsInEditMode)
-        {
-            CancelEditing();
-        }
-    }
-
-    private void DebugModeSwitch_Toggled(object sender, RoutedEventArgs e)
-    {
-        var debugSwitch = sender as ModernWpf.Controls.ToggleSwitch;
-        if (debugSwitch.IsOn)
-        {
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
-            subWindow.testPict.Visibility = Windows.UI.Xaml.Visibility.Visible;
-#endif
-            vm.TestPictVisible = Visibility.Visible;
-            vm.DebugTextVisible = Visibility.Visible;
-            CardsListView.InvalidateVisual();
-            CardsListView.Items.Refresh();
-
-        }
-        else
-        {
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
-            subWindow.testPict.Visibility = Windows.UI.Xaml.Visibility.Collapsed;
-#endif
-            vm.TestPictVisible = Visibility.Hidden;
-            vm.DebugTextVisible = Visibility.Collapsed;
-            CardsListView.InvalidateVisual();
-            CardsListView.Items.Refresh();
-
-        }
-    }
-
-    private void MenuItem_Click(object sender, RoutedEventArgs e)
-    {
-
-    }
-
-    private void ContextMenuEdit_Click(object sender, RoutedEventArgs e)
-    {
-        if (currentCard != null )
-        {
-            EditingCard = currentCard;
-            EnterEditMode(currentCard);
-        }
-
-    }
-
-    private void ContextMenuDelete_Click(object sender, RoutedEventArgs e)
-    {
-        Card_Delete(currentCard, EventArgs.Empty);
-    }
-
-    private void CardsListView_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        Point currentPosition = e.GetPosition(null);
-        Vector diff = _dragStartPoint - currentPosition;
-
-        if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
-            Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
-        {
-            if (sender is ui.ListView)
-            {
-                // ドラッグするアイテムを取得
-                ui.ListViewItem listViewItem = FindAncestor<ui.ListViewItem>((DependencyObject)e.OriginalSource);
-                if (listViewItem == null)
-                    e.Handled = true;
-            }
-        }
-
-    }
-
-    private void MenuOpenRectangle_MouseEnter(object sender, MouseEventArgs e)
-    {
-        SplitView.DisplayMode = ui.SplitViewDisplayMode.Inline;
-        SplitView.IsPaneOpen = true;
-    }
-
-    private void MenuOpenRectangle_GotMouseCapture(object sender, MouseEventArgs e)
-    {
-        SplitView.DisplayMode = ui.SplitViewDisplayMode.Inline;
-        SplitView.IsPaneOpen = true;
-    }
-
-
-    private void GridSplitter_DragDelta(object sender, DragDeltaEventArgs e)
-    {
-        if (SplitView.OpenPaneLength + e.HorizontalChange > 250)
-        SplitView.OpenPaneLength += e.HorizontalChange;
-        e.Handled = true;
-    }
-
-    private void Vm_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e == null) return;
-
-        // Shadow parameter change regenerates vm.ColorCardShadow; refresh selected card.
-        if (e.PropertyName == nameof(MainWindowViewModel.ColorCardShadow) ||
-            e.PropertyName == nameof(MainWindowViewModel.ShadowBlurRadius) ||
-            e.PropertyName == nameof(MainWindowViewModel.ShadowDepth) ||
-            e.PropertyName == nameof(MainWindowViewModel.ShadowDirection) ||
-            e.PropertyName == nameof(MainWindowViewModel.ShadowOpacity) ||
-            e.PropertyName == nameof(MainWindowViewModel.ShadowColor))
-        {
-            if (currentCard != null)
+            if (currentCard is null) return;
+            if (SelectedCardShowTopToggleSwitch.IsOn)
             {
                 SelectCard(currentCard);
             }
+            else
+            {
+                currentCard.Z = selectedCardZIndex;
+                SelectCard(currentCard);
+            }
         }
-    }
 
-    private static string GetAssetsDirectory(string bcfPath)
-    {
-        if (string.IsNullOrWhiteSpace(bcfPath)) return null;
-        return bcfPath + ".Assets";
-    }
-
-    private static string GetCardPngPath(string bcfPath, string cardId)
-    {
-        var assetsDir = GetAssetsDirectory(bcfPath);
-        if (string.IsNullOrWhiteSpace(assetsDir) || string.IsNullOrWhiteSpace(cardId)) return null;
-        return System.IO.Path.Combine(assetsDir, $"{cardId}.png");
-    }
-
-    private static BitmapImage TryLoadPng(string filePath)
-    {
-        try
+        private void ShadowToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return null;
+            if (currentCard is null) return;
+            SelectCard(currentCard);
 
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.UriSource = new Uri(filePath, UriKind.Absolute);
-            bmp.EndInit();
-            bmp.Freeze();
-            return bmp;
         }
-        catch
+
+        private void OverrayGrid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            return null;
+            // ロード中は入力抑止のため何もしない
+            if (vm?.IsLoading == true) return;
+
+            if (vm.IsInEditMode)
+            {
+                CancelEditing();
+            }
         }
-    }
 
-    private static void SavePng(string filePath, BitmapSource source)
-    {
-        if (string.IsNullOrWhiteSpace(filePath) || source == null) return;
-
-        var dir = System.IO.Path.GetDirectoryName(filePath);
-        if (!string.IsNullOrWhiteSpace(dir))
+        private void DebugModeSwitch_Toggled(object sender, RoutedEventArgs e)
         {
-            Directory.CreateDirectory(dir);
+            var debugSwitch = sender as ModernWpf.Controls.ToggleSwitch;
+            if (debugSwitch.IsOn)
+            {
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
+            subWindow.testPict.Visibility = Windows.UI.Xaml.Visibility.Visible;
+#endif
+                vm.TestPictVisible = Visibility.Visible;
+                vm.DebugTextVisible = Visibility.Visible;
+                CardsListView.InvalidateVisual();
+                CardsListView.Items.Refresh();
+
+            }
+            else
+            {
+#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
+            subWindow.testPict.Visibility = Windows.UI.Xaml.Visibility.Collapsed;
+#endif
+                vm.TestPictVisible = Visibility.Hidden;
+                vm.DebugTextVisible = Visibility.Collapsed;
+                CardsListView.InvalidateVisual();
+                CardsListView.Items.Refresh();
+
+            }
         }
 
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(source));
-        using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.Read);
-        encoder.Save(fs);
-    }
+        private void MenuItem_Click(object sender, RoutedEventArgs e)
+        {
+
+        }
+
+        private void ContextMenuEdit_Click(object sender, RoutedEventArgs e)
+        {
+            if (currentCard != null)
+            {
+                EditingCard = currentCard;
+                EnterEditMode(currentCard);
+            }
+
+        }
+
+        private void ContextMenuDelete_Click(object sender, RoutedEventArgs e)
+        {
+            Card_Delete(currentCard, EventArgs.Empty);
+        }
+
+        private void CardsListView_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            Point currentPosition = e.GetPosition(null);
+            Vector diff = _dragStartPoint - currentPosition;
+
+            if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
+                Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+            {
+                if (sender is ui.ListView)
+                {
+                    // ドラッグするアイテムを取得
+                    ui.ListViewItem listViewItem = FindAncestor<ui.ListViewItem>((DependencyObject)e.OriginalSource);
+                    if (listViewItem == null)
+                        e.Handled = true;
+                }
+            }
+
+        }
+
+        private void MenuOpenRectangle_MouseEnter(object sender, MouseEventArgs e)
+        {
+            SplitView.DisplayMode = ui.SplitViewDisplayMode.Inline;
+            SplitView.IsPaneOpen = true;
+        }
+
+        private void MenuOpenRectangle_GotMouseCapture(object sender, MouseEventArgs e)
+        {
+            SplitView.DisplayMode = ui.SplitViewDisplayMode.Inline;
+            SplitView.IsPaneOpen = true;
+        }
+
+
+        private void GridSplitter_DragDelta(object sender, DragDeltaEventArgs e)
+        {
+            if (SplitView.OpenPaneLength + e.HorizontalChange > 250)
+                SplitView.OpenPaneLength += e.HorizontalChange;
+            e.Handled = true;
+        }
+
+        private void Vm_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e == null) return;
+
+            // Shadow parameter change regenerates vm.ColorCardShadow; refresh selected card.
+            if (e.PropertyName == nameof(MainWindowViewModel.ColorCardShadow) ||
+                e.PropertyName == nameof(MainWindowViewModel.ShadowBlurRadius) ||
+                e.PropertyName == nameof(MainWindowViewModel.ShadowDepth) ||
+                e.PropertyName == nameof(MainWindowViewModel.ShadowDirection) ||
+                e.PropertyName == nameof(MainWindowViewModel.ShadowOpacity) ||
+                e.PropertyName == nameof(MainWindowViewModel.ShadowColor))
+            {
+                if (currentCard != null)
+                {
+                    SelectCard(currentCard);
+                }
+            }
+        }
+
+        private static string GetAssetsDirectory(string bcfPath)
+        {
+            if (string.IsNullOrWhiteSpace(bcfPath)) return null;
+            return bcfPath + ".Assets";
+        }
+
+        private static string GetCardPngPath(string bcfPath, string cardId)
+        {
+            var assetsDir = GetAssetsDirectory(bcfPath);
+            if (string.IsNullOrWhiteSpace(assetsDir) || string.IsNullOrWhiteSpace(cardId)) return null;
+            return System.IO.Path.Combine(assetsDir, $"{cardId}.png");
+        }
+
+        private static BitmapImage TryLoadPng(string filePath)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return null;
+
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.UriSource = new Uri(filePath, UriKind.Absolute);
+                bmp.EndInit();
+                bmp.Freeze();
+                return bmp;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void SavePng(string filePath, BitmapSource source)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || source == null) return;
+
+            var dir = System.IO.Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrWhiteSpace(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(source));
+            using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.Read);
+            encoder.Save(fs);
+        }
 
         // カード : 編集を破棄して編集モードを終了する際の処理
         public void CancelEditing()
@@ -1872,7 +1925,7 @@ namespace BrainCard
 
     public class PaneWidthConverter : IValueConverter
     {
-        public object Convert (Object value, Type targetType, object parameter, CultureInfo culture)
+        public object Convert(Object value, Type targetType, object parameter, CultureInfo culture)
         {
             if (value is double contentWidth)
             {
@@ -1922,7 +1975,7 @@ namespace BrainCard
     public class SavedImage
     {
         [DataMember]
-        public string Id {  get; set; }
+        public string Id { get; set; }
 
         [DataMember]
         public double X { get; set; }
