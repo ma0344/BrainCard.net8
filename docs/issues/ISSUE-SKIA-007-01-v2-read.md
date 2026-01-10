@@ -8,6 +8,14 @@
 - 旧ISF→v2変換（Step 10）
 - SubWindowで既存ストロークを再編集表示する
 
+## Parent / Child Issues
+本Issueは親Issueとして扱い、実装は子Issueに分割して順に進める。
+
+- `ISSUE-SKIA-007-01-01-open-dialog`（ロード入口の拡張子分岐を追加）
+- `ISSUE-SKIA-007-01-02-deserialize`（v2ドキュメントのデシリアライズを実装）
+- `ISSUE-SKIA-007-01-03-restore-cards`（v2カードの復元処理を実装）
+- `ISSUE-SKIA-007-01-04-load-ui`（ロードUIとエラーハンドリングを調整）
+
 ## Scope
 - v2 JSON のデシリアライズ（Newtonsoft.Json継続）
 - v2のカードメタデータ（id/x/y/z/recogText）読込
