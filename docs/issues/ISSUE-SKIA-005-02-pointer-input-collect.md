@@ -34,7 +34,12 @@
 - 点列肥大化防止のため最小距離閾値（例: 0.5 DIP）を適用する
 
 ## Acceptance Criteria
-- ドラッグで点が追加され、離すとストローク確定になる
+- ? マウス押下→移動→離しでストローク点列が収集される
+- ? クリックのみ（移動なし）でも1点ストロークとして扱える
+- ? `ViewScale` に基づく逆変換（displayed DIP → base DIP）で座標が基準キャンバスに揃う
+- ? 取得点は基準キャンバス範囲へクランプされる
+- ? 最小距離で間引きされる
 
-## Files (expected)
-- `SubWindow.xaml.cs` (modify)
+## 実装メモ（現状）
+- 入力は `InputCaptureLayer` で受け取り、`CardCanvasGrid` 基準の座標を `ToBaseCanvasDip(...)` で基準キャンバスDIPへ変換して保存する
+- 収集データは `_currentStroke`（進行中）と `_strokes`（確定）に保持する

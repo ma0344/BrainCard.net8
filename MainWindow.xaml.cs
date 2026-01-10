@@ -508,7 +508,7 @@ namespace BrainCard
 
             MoveSubWindow(card);
             subWindow.setEditCanvas(card);
-
+            subWindow.NotifyEditStateChanged();
         }
 
         // カード : 編集モードに入る際のSubWindowの移動処理
@@ -539,6 +539,7 @@ namespace BrainCard
             RestoreSubWindowPosition();
             EditingCard = null;
             vm.IsInEditMode = false;
+            subWindow.NotifyEditStateChanged();
         }
 #else
         public void FinishEditing(CustomInkCanvas customInkCanvas, ImageSource imageSource, string recogText)
@@ -550,6 +551,7 @@ namespace BrainCard
             RestoreSubWindowPosition();
             EditingCard = null;
             vm.IsInEditMode = false; // 編集モードを終了
+            subWindow.NotifyEditStateChanged();
         }
 #endif
 
@@ -1785,6 +1787,19 @@ namespace BrainCard
         // カード : 編集を破棄して編集モードを終了する際の処理
         public void CancelEditing()
         {
+            // 編集中でない場合は、UIの復帰処理を最小限にして早期終了
+            if (vm?.IsInEditMode != true && EditingCard == null)
+            {
+                try
+                {
+                    subWindow?.CanvasClear();
+                }
+                catch
+                {
+                }
+                return;
+            }
+
             OverrayGrid.Visibility = Visibility.Collapsed;
             if (EditingCard != null)
             {
@@ -1793,18 +1808,13 @@ namespace BrainCard
             RestoreSubWindowPosition();
             EditingCard = null;
             vm.IsInEditMode = false;
+            subWindow.NotifyEditStateChanged();
         }
 
-        public void ApplyEditingResultFromSubWindow(ImageSource imageSource, bool hasStrokes)
+        public void ApplyEditingResultFromSubWindow(ImageSource imageSource, bool hasStrokes, IReadOnlyList<BrainCard.Models.FileFormatV2.Bcf2Stroke> v2Strokes)
         {
             // ロード中は無視
             if (vm?.IsLoading == true) return;
-
-            // 編集モードでない場合は、現状のUIフローが未接続のため何もしない
-            if (vm?.IsInEditMode != true)
-            {
-                return;
-            }
 
             var target = EditingCard;
 
@@ -1827,13 +1837,12 @@ namespace BrainCard
                         return;
                     }
 
-                    // 削除しない場合は編集継続（SubWindow側はCanvasClearしているので空になる）
-                    // 仕様上「空ストロークのカードは作らない」ため、ここではキャンセル扱いで終了
                     CancelEditing();
                     return;
                 }
 
-                // ストロークあり: 画像更新して編集終了
+                // ストロークあり: v2ストロークを保持して画像更新して編集終了
+                target.SetV2Strokes(v2Strokes);
                 FinishEditing(customInkCanvas: null, imageSource, recogText: target.RecognizedText);
                 return;
             }
@@ -1848,7 +1857,8 @@ namespace BrainCard
             }
 
             // 新規作成: ストロークありなら追加
-            AddCard(customInkCanvas: null, imageSource, recogText: string.Empty);
+            var created = AddCard(customInkCanvas: null, imageSource, recogText: string.Empty);
+            created?.SetV2Strokes(v2Strokes);
             CancelEditing();
         }
 

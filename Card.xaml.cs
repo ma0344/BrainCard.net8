@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
@@ -15,14 +16,8 @@ using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using BrainCard.Models.FileFormatV2;
 using static BrainCard.Values;
-
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
-using Microsoft.Toolkit.Wpf.UI.XamlHost;
-using MyUWPApp;
-using Windows.Graphics.Imaging;
-using Windows.UI.Input.Inking;
-#endif
 
 namespace BrainCard
 {
@@ -154,6 +149,35 @@ namespace BrainCard
             }
         }
 
+        public List<Bcf2Stroke> V2Strokes { get; } = new();
+
+        public void SetV2Strokes(IReadOnlyList<Bcf2Stroke> strokes)
+        {
+            V2Strokes.Clear();
+            if (strokes == null) return;
+
+            foreach (var s in strokes)
+            {
+                if (s == null) continue;
+
+                V2Strokes.Add(new Bcf2Stroke
+                {
+                    Id = s.Id,
+                    Tool = s.Tool,
+                    Color = s.Color,
+                    Size = s.Size,
+                    Opacity = s.Opacity,
+                    DeviceKind = s.DeviceKind,
+                    Points = s.Points.Select(p => new Bcf2Point
+                    {
+                        X = p.X,
+                        Y = p.Y,
+                        Pressure = p.Pressure,
+                        T = p.T
+                    }).ToList()
+                });
+            }
+        }
 
 #if !BRAIN_CARD_DISABLE_XAML_ISLANDS
         public Card(MainWindow window, CustomInkCanvas inkCanvas, ImageSource imageSource)

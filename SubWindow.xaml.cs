@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -93,6 +94,7 @@ namespace BrainCard
         private WindowChrome windowChrome;
         private SplitView splitView;
         private ToggleButton inkToolbarToggleButton;
+        private Button _buttonKeep;
 
         private bool _isCollecting;
         private readonly List<Point> _currentStroke = new();
@@ -164,6 +166,7 @@ namespace BrainCard
 
             splitView = subwindow.Template.FindName("InkToolbarSplitView", subwindow) as SplitView;
             inkToolbarToggleButton = subwindow.Template.FindName("inkToolbarToggleButton", subwindow) as ToggleButton;
+            _buttonKeep = subwindow.Template.FindName("ButtonKeep", subwindow) as Button;
 
             // 初回表示時にSkia描画を促す
             try
@@ -177,6 +180,8 @@ namespace BrainCard
             EnsureStrokeOverlayWindow();
 
             OnWindowLoaded();
+
+            UpdateKeepButtonState();
         }
 
         private void CloseToolbarPaneIfOpen()
@@ -343,22 +348,66 @@ namespace BrainCard
             QueueOverlaySync();
         }
 
-        public bool HasInkStrokes => false;
+        public bool HasInkStrokes
+        {
+            get
+            {
+                if (_strokes.Count > 0) return true;
+                if (_isCollecting && _currentStroke.Count > 1) return true;
+                return false;
+            }
+        }
+
+        private bool IsEditMode => mainWindow?.vm?.IsInEditMode == true || mainWindow?.EditingCard != null;
+
+        private void UpdateKeepButtonState()
+        {
+            try
+            {
+                if (_buttonKeep == null) return;
+
+                // 編集モード: 空でもKeep有効（削除確認を出す）
+                if (IsEditMode)
+                {
+                    _buttonKeep.IsEnabled = true;
+                    return;
+                }
+
+                // 新規作成: ストロークができるまでKeep無効
+                _buttonKeep.IsEnabled = HasInkStrokes;
+            }
+            catch
+            {
+            }
+        }
 
         // SubWindow : Keepボタンがクリックされたときの処理
         // 保存処理は後でまとめて行うため、ここでは編集結果のキャプチャのみ行う（ストローク/認識はダミー）
         public async void ButtonKeep_Click(object sender, RoutedEventArgs e)
         {
             var hasStrokes = HasInkStrokes;
-            var imageSource = await CaputureCanvasAsync();
+            var v2StrokesSnapshot = GetV2StrokesSnapshot();
+
+            BitmapSource imageSource;
+            try
+            {
+                var skBitmap = RenderOffscreenBasePngBitmap();
+                var pngBytes = EncodePng(skBitmap);
+                imageSource = PngBytesToBitmapSource(pngBytes);
+            }
+            catch
+            {
+                // フォールバック: 画面キャプチャ
+                imageSource = await CaputureCanvasAsync() as BitmapSource;
+            }
 
             if (mainWindow != null)
             {
-                // 編集確定（新規追加/更新/削除）をMainWindow側に委譲
-                mainWindow.ApplyEditingResultFromSubWindow(imageSource, hasStrokes);
+                mainWindow.ApplyEditingResultFromSubWindow(imageSource, hasStrokes, v2StrokesSnapshot);
             }
 
             CanvasClear();
+            UpdateKeepButtonState();
         }
 
         public ImageSource CaputureCanvas()
@@ -519,13 +568,14 @@ namespace BrainCard
             _isCollecting = true;
             _currentStroke.Clear();
 
-            var p = e.GetPosition(CardCanvasGrid);
+            var p = ToBaseCanvasDip(e.GetPosition(CardCanvasGrid));
             _currentStroke.Add(p);
 
             _isInputCaptured = true;
             InputCaptureLayer.CaptureMouse();
 
             UpdateOverlay();
+            UpdateKeepButtonState();
             e.Handled = true;
         }
 
@@ -541,11 +591,12 @@ namespace BrainCard
                 return;
             }
 
-            var p = e.GetPosition(CardCanvasGrid);
+            var p = ToBaseCanvasDip(e.GetPosition(CardCanvasGrid));
             if (ShouldAppendPoint(_currentStroke, p, MinDistanceDip))
             {
                 _currentStroke.Add(p);
                 UpdateOverlay();
+                UpdateKeepButtonState();
             }
 
             e.Handled = true;
@@ -560,7 +611,7 @@ namespace BrainCard
 
             _isCollecting = false;
 
-            var p = e.GetPosition(CardCanvasGrid);
+            var p = ToBaseCanvasDip(e.GetPosition(CardCanvasGrid));
             if (_currentStroke.Count == 0)
             {
                 _currentStroke.Add(p);
@@ -571,6 +622,7 @@ namespace BrainCard
             _v2Strokes.Add(v2);
 
             UpdateOverlay();
+            UpdateKeepButtonState();
 
             if (_isInputCaptured)
             {
@@ -581,10 +633,63 @@ namespace BrainCard
             e.Handled = true;
         }
 
-        // DxHost_* はWin2Dホスト用。Skia移行中は未使用のため除外。
-        // private void DxHost_PointerDown(object sender, Win2DHost.HostPointerEventArgs e) { }
-        // private void DxHost_PointerMove(object sender, Win2DHost.HostPointerEventArgs e) { }
-        // private void DxHost_PointerUp(object sender, Win2DHost.HostPointerEventArgs e) { }
+        private static SKColor ParseColorOrDefault(string argb, SKColor fallback)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(argb) || argb.Length != 9 || argb[0] != '#') return fallback;
+                var a = Convert.ToByte(argb.Substring(1, 2), 16);
+                var r = Convert.ToByte(argb.Substring(3, 2), 16);
+                var g = Convert.ToByte(argb.Substring(5, 2), 16);
+                var b = Convert.ToByte(argb.Substring(7, 2), 16);
+                return new SKColor(r, g, b, a);
+            }
+            catch
+            {
+                return fallback;
+            }
+        }
+
+        private static double Clamp(double v, double min, double max)
+            => v < min ? min : (v > max ? max : v);
+
+        private double GetViewScale()
+        {
+            var w = Math.Max(1, CardCanvasGrid.ActualWidth);
+            var h = Math.Max(1, CardCanvasGrid.ActualHeight);
+            return Math.Min(w / cardWidth, h / cardHeight);
+        }
+
+        private Point ToBaseCanvasDip(Point displayedDip)
+        {
+            var scale = GetViewScale();
+            if (scale <= 0) scale = 1;
+
+            var x = displayedDip.X / scale;
+            var y = displayedDip.Y / scale;
+
+            x = Clamp(x, 0, cardWidth);
+            y = Clamp(y, 0, cardHeight);
+
+            return new Point(x, y);
+        }
+
+        private void OnWindowLoaded()
+        {
+            WindowLoaded?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void QueueOverlaySync()
+        {
+            if (_overlaySyncQueued) return;
+            _overlaySyncQueued = true;
+
+            Dispatcher.InvokeAsync(() =>
+            {
+                _overlaySyncQueued = false;
+                SyncOverlayWindowBounds();
+            }, System.Windows.Threading.DispatcherPriority.Render);
+        }
 
         public void CanvasClear()
         {
@@ -604,17 +709,150 @@ namespace BrainCard
             catch
             {
             }
+
+            UpdateKeepButtonState();
         }
 
-        private void ClearButton_Click(object sender, RoutedEventArgs e)
+        private void UpdateOverlay()
         {
-            CanvasClear();
-            if (mainWindow.vm.IsInEditMode) mainWindow.CancelEditing();
+            // Skiaで描画するため、再描画要求のみ行う
+            try
+            {
+                SkiaElement?.InvalidateVisual();
+            }
+            catch
+            {
+            }
+
+            UpdateKeepButtonState();
         }
 
-        private void SplitView_PaneOpening(ModernWpf.Controls.SplitView sender, object args) { }
+        private void DrawStroke(SKCanvas canvas, IReadOnlyList<Point> baseDipPoints, SKPaint paint, double viewScale, double pxPerDipX, double pxPerDipY)
+        {
+            if (baseDipPoints == null || baseDipPoints.Count == 0) return;
 
+            SKPoint Map(Point baseDip)
+            {
+                // base DIP -> displayed DIP -> px
+                var displayedX = baseDip.X * viewScale;
+                var displayedY = baseDip.Y * viewScale;
+                return new SKPoint((float)(displayedX * pxPerDipX), (float)(displayedY * pxPerDipY));
+            }
+
+            if (baseDipPoints.Count == 1)
+            {
+                var p = Map(baseDipPoints[0]);
+                canvas.DrawPoint(p, paint);
+                return;
+            }
+
+            using var path = new SKPath();
+            path.MoveTo(Map(baseDipPoints[0]));
+            for (var i = 1; i < baseDipPoints.Count; i++)
+            {
+                path.LineTo(Map(baseDipPoints[i]));
+            }
+
+            canvas.DrawPath(path, paint);
+        }
+
+        private void RenderToCanvas(SKCanvas canvas, double viewScale, double pxPerDipX, double pxPerDipY)
+        {
+            canvas.Clear(SKColors.White);
+
+            // Clip: 537x380 を viewScale で拡大した表示領域に限定
+            var displayedW = cardWidth * viewScale;
+            var displayedH = cardHeight * viewScale;
+            canvas.ClipRect(new SKRect(0, 0, (float)(displayedW * pxPerDipX), (float)(displayedH * pxPerDipY)));
+
+            using var paint = new SKPaint
+            {
+                IsAntialias = true,
+                Color = ParseColorOrDefault(DefaultStrokeColor, SKColors.Black),
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = (float)(DefaultStrokeSizeDip * viewScale * pxPerDipX),
+                StrokeCap = SKStrokeCap.Round,
+                StrokeJoin = SKStrokeJoin.Round
+            };
+
+            foreach (var s in _strokes)
+            {
+                DrawStroke(canvas, s, paint, viewScale, pxPerDipX, pxPerDipY);
+            }
+
+            if (_isCollecting)
+            {
+                DrawStroke(canvas, _currentStroke, paint, viewScale, pxPerDipX, pxPerDipY);
+            }
+        }
+
+        private SKBitmap RenderOffscreenBasePngBitmap()
+        {
+            var info = new SKImageInfo((int)cardWidth, (int)cardHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
+            using var surface = SKSurface.Create(info);
+            var canvas = surface.Canvas;
+
+            // オフスクリーンは基準キャンバス（537x380 DIP）と1:1で扱う
+            var viewScale = 1.0;
+            var pxPerDipX = 1.0;
+            var pxPerDipY = 1.0;
+
+            RenderToCanvas(canvas, viewScale, pxPerDipX, pxPerDipY);
+
+            using var image = surface.Snapshot();
+            var bitmap = new SKBitmap(info);
+            image.ReadPixels(info, bitmap.GetPixels(), info.RowBytes, 0, 0);
+            return bitmap;
+        }
+
+        private static byte[] EncodePng(SKBitmap bitmap)
+        {
+            using var image = SKImage.FromBitmap(bitmap);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+            return data.ToArray();
+        }
+
+        private static BitmapSource PngBytesToBitmapSource(byte[] pngBytes)
+        {
+            if (pngBytes == null || pngBytes.Length == 0) return null;
+
+            var bmp = new BitmapImage();
+            using var ms = new MemoryStream(pngBytes);
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.StreamSource = ms;
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
+        }
+
+        private void SkiaElement_PaintSurface(object sender, SKPaintSurfaceEventArgs e)
+        {
+            var viewScale = GetViewScale();
+            if (viewScale <= 0) viewScale = 1;
+
+            var actualW = Math.Max(1, CardCanvasGrid.ActualWidth);
+            var actualH = Math.Max(1, CardCanvasGrid.ActualHeight);
+
+            var pxPerDipX = e.Info.Width / actualW;
+            var pxPerDipY = e.Info.Height / actualH;
+
+            RenderToCanvas(e.Surface.Canvas, viewScale, pxPerDipX, pxPerDipY);
+        }
+
+        // SubWindow.xaml が参照するハンドラーを復元（既存挙動を維持）
+        private void SplitView_PaneOpening(ModernWpf.Controls.SplitView sender, object args) { }
         private void SplitView_PaneClosed(ModernWpf.Controls.SplitView sender, object args) { }
+
+        private void ToggleButton_Checked(object sender, RoutedEventArgs e)
+        {
+            if (splitView != null) splitView.IsPaneOpen = true;
+        }
+
+        private void ToggleButton_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (splitView != null) splitView.IsPaneOpen = false;
+        }
 
         private void CustomTitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
@@ -631,70 +869,45 @@ namespace BrainCard
             }
         }
 
-        private void ToggleButton_Checked(object sender, RoutedEventArgs e)
+        private void ClearButton_Click(object sender, RoutedEventArgs e)
         {
-            if (splitView != null) splitView.IsPaneOpen = true;
+            CanvasClear();
+            if (mainWindow.vm.IsInEditMode) mainWindow.CancelEditing();
         }
 
-        private void ToggleButton_Unchecked(object sender, RoutedEventArgs e)
-        {
-            if (splitView != null) splitView.IsPaneOpen = false;
-        }
-
-        public void OnWindowLoaded()
-        {
-            WindowLoaded?.Invoke(null, null);
-        }
-
+        // MainWindowから呼ばれる既存APIを復元
         public void setEditCanvas(Card card)
         {
             // 暫定: PNGキャッシュ表示が前提になるまで、ストローク復元は行わない
-            // （Win2D移行後に v2 stroke へ統一して復元する）
+            // （Skia側のv2 stroke復元は別Issueで実装）
         }
 
-        private void QueueOverlaySync()
+        public void NotifyEditStateChanged()
         {
-            if (_overlaySyncQueued) return;
-            _overlaySyncQueued = true;
-
-            Dispatcher.InvokeAsync(() =>
-            {
-                _overlaySyncQueued = false;
-                SyncOverlayWindowBounds();
-            }, System.Windows.Threading.DispatcherPriority.Render);
+            UpdateKeepButtonState();
         }
 
-        private void UpdateOverlay()
+        public IReadOnlyList<Bcf2Stroke> GetV2StrokesSnapshot()
         {
-            // Skiaへ移行するため、オーバーレイWindowでの描画は当面停止
-            // （必要になったら削除か、Skia描画へ統合する）
-            try
-            {
-                SkiaElement?.InvalidateVisual();
-            }
-            catch
-            {
-            }
-        }
-
-        private void SkiaElement_PaintSurface(object sender, SKPaintSurfaceEventArgs e)
-        {
-            var canvas = e.Surface.Canvas;
-            canvas.Clear(SKColors.White);
-
-            using var paint = new SKPaint
-            {
-                IsAntialias = true,
-                Color = SKColors.LightGray,
-                Style = SKPaintStyle.Stroke,
-                StrokeWidth = 2
-            };
-
-            // テスト用フレーム（描画が動作していることを目視確認するため）
-            var rect = new SKRect(1, 1, e.Info.Width - 2, e.Info.Height - 2);
-            canvas.DrawRect(rect, paint);
-
-            // TODO: 次ステップで_strokes/_currentStrokeを描画する
+            // Keep時点のスナップショットを返す（参照共有を避ける）
+            return _v2Strokes
+                .Select(s => new Bcf2Stroke
+                {
+                    Id = s.Id,
+                    Tool = s.Tool,
+                    Color = s.Color,
+                    Size = s.Size,
+                    Opacity = s.Opacity,
+                    DeviceKind = s.DeviceKind,
+                    Points = s.Points.Select(p => new Bcf2Point
+                    {
+                        X = p.X,
+                        Y = p.Y,
+                        Pressure = p.Pressure,
+                        T = p.T
+                    }).ToList()
+                })
+                .ToList();
         }
     }
 }

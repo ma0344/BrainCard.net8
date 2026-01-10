@@ -59,36 +59,37 @@
    - ✅ v2用データクラス（ファイル/カード/ストローク/点）を追加する
    - ? JSONシリアライズ/デシリアライズ方法を確定する（Newtonsoft継続）
 
-5. **SkiaSharpでの最小入力と描画を成立させる**
-   - 5-1 ? SubWindow 上に `SKElement` をホストできるようにする `docs/issues/ISSUE-SKIA-005-01-host-in-subwindow.md`
-   - 5-2 ? 1ストローク分の入力収集（マウス）を実装する（押下→移動→離す） `docs/issues/ISSUE-SKIA-005-02-pointer-input-collect.md`
-   - 5-3 ? 収集した点列を即時描画できるようにする（スムージング不要） `docs/issues/ISSUE-SKIA-005-03-rendering.md`
+5. ✅ **SkiaSharpでの最小入力と描画を成立させる**
+   - ✅ SubWindow 上に `SKElement` をホストできるようにする `docs/issues/ISSUE-SKIA-005-01-host-in-subwindow.md`
+   - ✅ 1ストローク分の入力収集（マウス）を実装する（押下→移動→離す） `docs/issues/ISSUE-SKIA-005-02-pointer-input-collect.md`
+   - ✅ 収集した点列を即時描画できるようにする（スムージング不要） `docs/issues/ISSUE-SKIA-005-03-rendering.md`
 
-6. **SkiaSharpでPNG生成してカード化できるようにする**
-   - 6-1 ? Keepで `MainWindow` にカード（PNG）を追加/更新できるようにする（成果物契約を整備） `docs/issues/ISSUE-SKIA-000-overview.md`
-   - 6-2 ? PNGを **537x380px固定**で生成できるようにする `docs/issues/ISSUE-SKIA-005-04-png-generation.md`
-   - 6-3 ? 空ストロークのカードを作成しない（新規は追加しない／編集は削除確認）
+6. ✅ **SkiaSharpでPNG生成してカード化できるようにする**
+   - ✅ Keepで `MainWindow` にカード（PNG）を追加/更新できるようにする（成果物契約を整備） `docs/issues/ISSUE-SKIA-000-overview.md`
+   - ✅ PNGを **537x380px固定**で生成できるようにする `docs/issues/ISSUE-SKIA-005-04-png-generation.md`
+   - ✅ 空ストロークのカードを作成しない（新規は追加しない／編集は削除確認）
 
 7. **新形式（v2）の保存/読込経路を追加する**
-   - v2ファイル読み込み処理を追加する
+   - v2ファイル読み込み処理を追加する `docs/issues/ISSUE-SKIA-007-01-v2-read.md`
+   - v2ファイル保存処理を追加する `docs/issues/ISSUE-SKIA-007-02-v2-save.md`
    - `Assets`（PNGキャッシュ）フォルダ運用を継続する
 
 8. **保存時に新拡張子へ強制する**
-   - 旧拡張子（`.bcf`）での保存・上書きを禁止する
+   - 旧拡張子（`.bcf`）での保存・上書きを禁止する `docs/issues/ISSUE-SKIA-008-01-force-bcf2-save.md`
    - 旧ファイルを開いて保存する場合は必ず「名前を付けて保存」で新拡張子を提示する
    - UI文言（メッセージ/フィルタ）を更新する
 
 9. **旧`.bcf` 読み込み経路を分離する**
-   - 旧`.bcf` 読み込み処理を残す（互換読み込み）
+   - 旧`.bcf` 読み込み処理を残す（互換読み込み） `docs/issues/ISSUE-SKIA-009-01-legacy-bcf-read-split.md`
    - 旧ISFを `InkStrokeContainer.LoadAsync()` で復元できる状態にする
    - 読み込み後、内部表現は新モデルに統一する
 
 10. **旧ISF→新ストローク形式への変換機能を実装する**
-    - `InkStroke` から点列（x,y,pressure,t）と描画属性（色、太さ、透過、蛍光ペン等）を抽出する
+    - `InkStroke` から点列（x,y,pressure,t）と描画属性（色、太さ、透過、蛍光ペン等）を抽出する `docs/issues/ISSUE-SKIA-010-01-isf-to-v2-convert.md`
     - `t` が得られない場合は **速度推定で補完**して格納する
 
 11. **消しゴム処理をストローク削除で実装する**
-    - 消しゴム入力（右クリック押下/ペン裏）を判定する
+    - 消しゴム入力（右クリック押下/ペン裏）を判定する `docs/issues/ISSUE-SKIA-011-01-eraser-stroke-delete.md`
     - ヒット判定で対象ストロークを **削除**する（部分消去・操作ログ・Undo/Redoなし）
 
 12. **ビルドと動作確認を行う**

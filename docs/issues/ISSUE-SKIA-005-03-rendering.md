@@ -20,9 +20,14 @@
 - クリップ: 描画もPNGも 537x380 の範囲でクリップ（範囲外は切り捨て）
 
 ## Acceptance Criteria
-- マウスドラッグに追従して線が見える
-- 離した後も線が残る
-- Clearで線が消える
+- ? マウスドラッグに追随して描画される
+- ? 縮尺変更（SubWindowリサイズ）に追随して描画される
+- ? Clearで描画が消える
+
+## 実装メモ（現状）
+- `SkiaElement_PaintSurface` で `ViewScale` と `pxPerDip` を算出し、基準キャンバスDIP→表示pxへ変換して描画する
+- クリップは基準キャンバス（537x380）相当の表示領域に適用する
+- 確定ストローク（`_strokes`）と収集中（`_currentStroke`）を同様に描画し分ける
 
 ## Files (expected)
 - `SubWindow.xaml.cs` (modify)
