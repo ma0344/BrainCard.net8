@@ -1,4 +1,4 @@
-﻿---
+---
 description: 'Master Architect Mode (Hybrid): 実務で運用できる計画駆動・品質担保・最小変更を両立する指示セット。リポジトリ非依存。'
 model: GPT-5 (copilot)
 name: 'The Sovereign Architect (ソブリン・アーキテクト)'

@@ -1,26 +1,26 @@
-# ISSUE-005-06 �_��𑦎��`��ł���悤�ɂ���i�X���[�W���O�s�v�j
+# ISSUE-005-06 点列を即時描画できるようにする（スムージング不要）
 
 ## Goal
-- `SubWindow` ��Ŏ��W�����_����A�ҏW�r���[�̈�ɑ����ɉ����ł���
+- `SubWindow` 上で収集した点列を、編集ビュー領域に即時に可視化できる
 
 ## Scope
-- ���W���X�g���[�N�i�h���b�O���j�Ɗm��ς݃X�g���[�N�i��������j��`�悷��
-- �ŏ������i�P�F/�Œ葾���j�͌Œ�l�œK�p����
+- 収集中ストローク（ドラッグ中）と確定済みストローク（離した後）を描画する
+- 最小属性（単色/固定太さ）は固定値で適用する
 
 ## Non-goals
-- Win2D����
-- �X���[�W���O/���/�x�W�F
-- ���i�������_�����O�i�A���`�G�C���A�X�A�M���\���Ȃǁj
+- Win2D導入
+- スムージング/補間/ベジェ
+- 高品質レンダリング（アンチエイリアス、筆圧表現など）
 
 ## Design / Implementation Notes
-- �ŏ����B�_�Ƃ��āAD3D11��2D���`�����荞�܂��A�qHWND��� **GDI�iWM_PAINT�j** �ŃI�[�o�[���C�`�悷��
-- `DxSwapChainHost.SetOverlayStrokes(IEnumerable<IEnumerable<Point>>)` ��DIP�_���n���A`InvalidateRect` �ōĕ`�悷��
-- ���W��DIP�ŕێ��iISSUE-005-03�j�B�`�掞��DPI�X�P�[����Pixel�֕ϊ�����GDI�̍��W�֓n��
+- 最小到達点として、D3D11で2D線描画を作り込まず、子HWND上へ **GDI（WM_PAINT）** でオーバーレイ描画する
+- `DxSwapChainHost.SetOverlayStrokes(IEnumerable<IEnumerable<Point>>)` にDIP点列を渡し、`InvalidateRect` で再描画する
+- 座標はDIPで保持（ISSUE-005-03）。描画時にDPIスケールでPixelへ変換してGDIの座標へ渡す
 
 ## Acceptance Criteria
-- �}�E�X�h���b�O�ɒǏ]���Đ���������
-- ��������������c��i�m��ς݂Ƃ��ĕ`�悳���j
-- `Clear` �Ő���������
+- マウスドラッグに追従して線が見える
+- 離した後も線が残る（確定済みとして描画される）
+- `Clear` で線が消える
 
 ## Files
 - `Win2DHost/DxSwapChainHost.cs` (modify)
@@ -28,11 +28,11 @@
 
 ## Validation
 - manual:
-  1. SubWindow���J��
-  2. �J�[�h�̈���h���b�O���Đ��������邱�Ƃ��m�F
-  3. �����Ă������c�邱�Ƃ��m�F
-  4. Clear�{�^���Ő��������邱�Ƃ��m�F
+  1. SubWindowを開く
+  2. カード領域をドラッグして線が見えることを確認
+  3. 離しても線が残ることを確認
+  4. Clearボタンで線が消えることを確認
 
 ## Risks
-- GDI�I�[�o�[���C�͍ŏI�`�ł͂Ȃ� - Win2D�����ւ��̂��߂̎b��o�H�Ƃ��Ĉ���
-- �ĕ`��^�C�~���O�ɂ���Ă�������o�� - �K�v�ɉ�����BeginPaint/EndPaint��_�u���o�b�t�@������������
+- GDIオーバーレイは最終形ではない - Win2D差し替えのための暫定経路として扱う
+- 再描画タイミングによってちらつきが出る - 必要に応じてBeginPaint/EndPaintやダブルバッファ化を検討する

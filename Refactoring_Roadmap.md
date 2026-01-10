@@ -1,88 +1,88 @@
-# ���t�@�N�^�����O���[�h�}�b�v�iWPF Ink �� Win2D / ��ISF�͓ǂݍ��ݐ�p�j
+# リファクタリングロードマップ（WPF Ink → Win2D / 旧ISFは読み込み専用）
 
-�{�h�L�������g�́AWPF�ł�Ink������Win2D�x�[�X�ֈڍs���A���`���i`.bcf` ����ISF�j�͓ǂݍ��ݐ�p�Ƃ��Ĉێ����邽�߂̎����菇�iSteps�j���܂Ƃ߂����̂ł��B
+本ドキュメントは、WPF版のInk実装をWin2Dベースへ移行し、旧形式（`.bcf` 内のISF）は読み込み専用として維持するための実装手順（Steps）をまとめたものです。
 
-## �O��E�ӎv����
-- UI�� **WPF���p��**����iWinUI 3 �ڍs�͖{���[�h�}�b�v�̑ΏۊO�j
-- Ink�ҏW�r���[�� **`SubWindow` �̂�**��u���ΏۂƂ���i`MainWindow` �̃J�[�h�\���� PNG �̂݁j
-- ���̓f�o�C�X�� **�y���i�M���K�{�j/�}�E�X/�^�b�`**�ȂǁA�S�|�C���e�B���O�f�o�C�X��ΏۂƂ���
-- �����S���� **���ʂ̂ݕۑ�**���A**�X�g���[�N�P�ʂō폜**����i���������͑z�肵�Ȃ��j
-- ���f�[�^�݊��� **�p�^�[��1**�F��`.bcf`��ǂݍ��݉\�ɂ��A�ۑ����� **��ɐV�g���q�֋���**����i���g���q�ł͕ۑ��s�j
-- �_��̎��� `t` �́A
-  - �V�������W���͎擾�ł���͈͂ŕێ�
-  - ��ISF���畜���ł��Ȃ��ꍇ�� **���x����**�ŕ⊮����
+## 前提・意思決定
+- UIは **WPFを継続**する（WinUI 3 移行は本ロードマップの対象外）
+- Ink編集ビューは **`SubWindow` のみ**を置換対象とする（`MainWindow` のカード表示は PNG のみ）
+- 入力デバイスは **ペン（筆圧必須）/マウス/タッチ**など、全ポインティングデバイスを対象とする
+- 消しゴムは **結果のみ保存**し、**ストローク単位で削除**する（部分消去は想定しない）
+- 旧データ互換は **パターン1**：旧`.bcf`を読み込み可能にし、保存時は **常に新拡張子へ強制**する（旧拡張子では保存不可）
+- 点列の時刻 `t` は、
+  - 新方式収集時は取得できる範囲で保持
+  - 旧ISFから復元できない場合は **速度推定**で補完する
 
-## �S�[���i�t�Z�j
-- ��`.bcf`��ǂݍ��݁��\���iPNG�����܂ށj�ł���
-- `SubWindow`�ōĕҏW�ł���
-- �ۑ����͏�ɐV�g���q�֋����ł���
-- �V�t�@�C����ǂݍ��݁��ĕҏW���ĕۑ��ł���
+## ゴール（逆算）
+- 旧`.bcf`を読み込み→表示（PNG生成含む）できる
+- `SubWindow`で再編集できる
+- 保存時は常に新拡張子へ強制できる
+- 新ファイルを読み込み→再編集→再保存できる
 
-## �ŏ����B�_�i��Ɍ��؉\�������j
-- **�|�C���e�B���O�f�o�C�X���́i�Œ���̓}�E�X/�P�F/���M���ŉj���󂯎��**
-- **Win2D�ŐV�X�g���[�N��`�悵**
-- **�\������Ă�����e��PNG������**
-- **`MainWindow` �ɃJ�[�h�iPNG�j�Ƃ��Ēǉ��ł���**
+## 最小到達点（先に検証可能性を作る）
+- **ポインティングデバイス入力（最低限はマウス/単色/一定筆圧で可）を受け取り**
+- **Win2Dで新ストロークを描画し**
+- **表示されている内容をPNG化して**
+- **`MainWindow` にカード（PNG）として追加できる**
 
 ## Plan Steps
-1. ? **���|�W�g���\���𒲍�����**
-   - ? `SubWindow` / `Card` / �ۑ��Ǎ� / PNG�����̐Ӗ��������m�F����
-   - ? `MyUWPApp` �̎c���ˑ��ӏ����m�F����
+1. ? **リポジトリ構成を調査する**
+   - ? `SubWindow` / `Card` / 保存読込 / PNG生成の責務分割を確認する
+   - ? `MyUWPApp` の残存依存箇所を確認する
 
-2. ? **��Ink�ˑ��ӏ���I��������**
-   - ? `Windows.UI.Input.Inking` / `Windows.UI.Xaml.*` / `Microsoft.Toolkit.*` �̎g�p�ӏ���񋓂���
-   - ? �ҏW�r���[�iSubWindow�j�EPNG�����E�ۑ�/�Ǎ��̌o�H�𐮗�����
+2. ? **旧Ink依存箇所を棚卸しする**
+   - ? `Windows.UI.Input.Inking` / `Windows.UI.Xaml.*` / `Microsoft.Toolkit.*` の使用箇所を列挙する
+   - ? 編集ビュー（SubWindow）・PNG生成・保存/読込の経路を整理する
 
-3. ? **�V�t�@�C���`���iv2�j�d�l���m�肷��**
-   - ? �V�g���q�i��F`.bcf2`�j���m�肷��
-   - ? �f�[�^�P�ʁi�t�@�C�����J�[�h���X�g���[�N���_�j�ƕK�{/�C�Ӎ��ڂ��m�肷��
-   - ? �P�ʁiDIP�j�Ɠ_�� `p[].t` �̒�`�i����ms�A�J�n=0�j���m�肷��
-   - ? �����S���́u���ʂ̂ݕۑ��v���u�X�g���[�N�P�ʍ폜�v���m�肷��
-   - ? ���`���ۑ��̋֎~�iUI/�g���q/�t�B���^/�㏑�������j���m�肷��
+3. ? **新ファイル形式（v2）仕様を確定する**
+   - ? 新拡張子（例：`.bcf2`）を確定する
+   - ? データ単位（ファイル→カード→ストローク→点）と必須/任意項目を確定する
+   - ? 単位（DIP）と点列 `p[].t` の定義（相対ms、開始=0）を確定する
+   - ? 消しゴムは「結果のみ保存」かつ「ストローク単位削除」を確定する
+   - ? 旧形式保存の禁止（UI/拡張子/フィルタ/上書き挙動）を確定する
 
-4. ? **�V�f�[�^���f����ǉ�����**
-   - ? v2�p�f�[�^�N���X�i�t�@�C��/�J�[�h/�X�g���[�N/�_�j��ǉ�����
-   - ? JSON�V���A���C�Y/�f�V���A���C�Y���@���m�肷��iNewtonsoft�p���j
+4. ? **新データモデルを追加する**
+   - ? v2用データクラス（ファイル/カード/ストローク/点）を追加する
+   - ? JSONシリアライズ/デシリアライズ方法を確定する（Newtonsoft継続）
 
-5. **Win2D�ł̍ŏ����͂ƕ`��𐬗�������**
-   - 5-1 ? SubWindow ���Win2D�`��r���[���z�X�g�ł���悤�ɂ���i`HwndHost` ���j `docs/issues/ISSUE-005-01-win2d-host-in-subwindow.md`
-   - 5-2 ? 1�X�g���[�N���̓��͎��W�i�}�E�X�j����������i�������ړ��������j `docs/issues/ISSUE-005-02-pointer-input-collect.md`
-   - 5-3 ? �_��̍��W�n�iDIP�j�ƃT���v�����O���j�i�ړ��C�x���g���{�K�v�Ȃ�ŏ�����臒l�j���m�肷�� `docs/issues/ISSUE-005-03-coordinates-and-sampling.md`
-   - 5-4 ? �`�摮���̍ŏ��Z�b�g���m�肷��i�P�F�E�Œ葾���E�Œ�M���j `docs/issues/ISSUE-005-04-min-drawing-attributes.md`
-   - 5-5 ? �V�X�g���[�N���f���iv2�j�֔��f�ł���悤�ɂ���i�܂��̓��������j `docs/issues/ISSUE-005-05-map-to-v2-stroke-model.md`
-   - 5-6 ? ���W�����_��𑦎��`��ł���悤�ɂ���i�X���[�W���O�s�v�j `docs/issues/ISSUE-005-06-immediate-rendering.md`
+5. **Win2Dでの最小入力と描画を成立させる**
+   - 5-1 ? SubWindow 上でWin2D描画ビューをホストできるようにする（`HwndHost` 等） `docs/issues/ISSUE-005-01-win2d-host-in-subwindow.md`
+   - 5-2 ? 1ストローク分の入力収集（マウス）を実装する（押下→移動→離す） `docs/issues/ISSUE-005-02-pointer-input-collect.md`
+   - 5-3 ? 点列の座標系（DIP）とサンプリング方針（移動イベント毎＋必要なら最小距離閾値）を確定する `docs/issues/ISSUE-005-03-coordinates-and-sampling.md`
+   - 5-4 ? 描画属性の最小セットを確定する（単色・固定太さ・固定筆圧） `docs/issues/ISSUE-005-04-min-drawing-attributes.md`
+   - 5-5 ? 新ストロークモデル（v2）へ反映できるようにする（まずはメモリ内） `docs/issues/ISSUE-005-05-map-to-v2-stroke-model.md`
+   - 5-6 ? 収集した点列を即時描画できるようにする（スムージング不要） `docs/issues/ISSUE-005-06-immediate-rendering.md`
 
-6. ? **Win2D��PNG�������ăJ�[�h���ł���悤�ɂ���**
-   - ? Keep/Apply�� `MainWindow` �ɃJ�[�h�iPNG�j��ǉ�/�X�V�ł���悤�ɂ���i�b��o�H�j
-   - ? ��X�g���[�N�̃J�[�h���쐬���Ȃ��i�V�K�͒ǉ����Ȃ��^�ҏW�͍폜�m�F�j
+6. ? **Win2DでPNG生成してカード化できるようにする**
+   - ? Keep/Applyで `MainWindow` にカード（PNG）を追加/更新できるようにする（暫定経路）
+   - ? 空ストロークのカードを作成しない（新規は追加しない／編集は削除確認）
 
-7. **�V�`���iv2�j�̕ۑ�/�Ǎ��o�H��ǉ�����**
-   - v2�t�@�C���ǂݍ��ݏ�����ǉ�����
-   - `Assets`�iPNG�L���b�V���j�t�H���_�^�p���p������
+7. **新形式（v2）の保存/読込経路を追加する**
+   - v2ファイル読み込み処理を追加する
+   - `Assets`（PNGキャッシュ）フォルダ運用を継続する
 
-8. **�ۑ����ɐV�g���q�֋�������**
-   - ���g���q�i`.bcf`�j�ł̕ۑ��E�㏑�����֎~����
-   - ���t�@�C�����J���ĕۑ�����ꍇ�͕K���u���O��t���ĕۑ��v�ŐV�g���q��񎦂���
-   - UI�����i���b�Z�[�W/�t�B���^�j���X�V����
+8. **保存時に新拡張子へ強制する**
+   - 旧拡張子（`.bcf`）での保存・上書きを禁止する
+   - 旧ファイルを開いて保存する場合は必ず「名前を付けて保存」で新拡張子を提示する
+   - UI文言（メッセージ/フィルタ）を更新する
 
-9. **��`.bcf` �ǂݍ��݌o�H�𕪗�����**
-   - ��`.bcf` �ǂݍ��ݏ������c���i�݊��ǂݍ��݁j
-   - ��ISF�� `InkStrokeContainer.LoadAsync()` �ŕ����ł����Ԃɂ���
-   - �ǂݍ��݌�A�����\���͐V���f���ɓ��ꂷ��
+9. **旧`.bcf` 読み込み経路を分離する**
+   - 旧`.bcf` 読み込み処理を残す（互換読み込み）
+   - 旧ISFを `InkStrokeContainer.LoadAsync()` で復元できる状態にする
+   - 読み込み後、内部表現は新モデルに統一する
 
-10. **��ISF���V�X�g���[�N�`���ւ̕ϊ��@�\����������**
-    - `InkStroke` ����_��ix,y,pressure,t�j�ƕ`�摮���i�F�A�����A���߁A�u���y�����j�𒊏o����
-    - `t` �������Ȃ��ꍇ�� **���x����ŕ⊮**���Ċi�[����
+10. **旧ISF→新ストローク形式への変換機能を実装する**
+    - `InkStroke` から点列（x,y,pressure,t）と描画属性（色、太さ、透過、蛍光ペン等）を抽出する
+    - `t` が得られない場合は **速度推定で補完**して格納する
 
-11. **�����S���������X�g���[�N�폜�Ŏ�������**
-    - �����S�����́i�E�N���b�N����/�y�����j�𔻒肷��
-    - �q�b�g����őΏۃX�g���[�N�� **�폜**����i���������E���샍�O�EUndo/Redo�Ȃ��j
+11. **消しゴム処理をストローク削除で実装する**
+    - 消しゴム入力（右クリック押下/ペン裏）を判定する
+    - ヒット判定で対象ストロークを **削除**する（部分消去・操作ログ・Undo/Redoなし）
 
-12. **�r���h�Ɠ���m�F���s��**
-    - `.NET 8` �Ńr���h���ʂ邱�Ƃ��m�F����
-    - ��`.bcf` ��ǂݍ��݁��\���iPNG�����܂ށj���V�g���q�֕ۑ��ł��邱�Ƃ��m�F����
-    - �V�t�@�C����ǂݍ��݁��ĕҏW���ۑ��ł��邱�Ƃ��m�F����
+12. **ビルドと動作確認を行う**
+    - `.NET 8` でビルドが通ることを確認する
+    - 旧`.bcf` を読み込み→表示（PNG生成含む）→新拡張子へ保存できることを確認する
+    - 新ファイルを読み込み→再編集→保存できることを確認する
 
-## ����
-- �{���[�h�}�b�v�́u�݌v���ڍs�̓��؁v���������̂ł���A�e�X�e�b�v�͎����󋵂ɉ����ĕ����E���������\��������܂��B
+## メモ
+- 本ロードマップは「設計→移行の道筋」を示すものであり、各ステップは実装状況に応じて分割・統合される可能性があります。
 

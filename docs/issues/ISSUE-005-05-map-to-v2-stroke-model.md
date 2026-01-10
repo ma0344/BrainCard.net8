@@ -1,33 +1,33 @@
-# ISSUE-005-05 �V�X�g���[�N���f���iv2�j�֔��f�ł���悤�ɂ���i�܂��̓��������j
+# ISSUE-005-05 新ストロークモデル（v2）へ反映できるようにする（まずはメモリ内）
 
 ## Goal
-- `SubWindow` �Ŏ��W�����_��iDIP�j�ƍŏ��`�摮�����Av2�X�g���[�N���f���i`Bcf2Stroke` / `Bcf2Point`�j�փ��������Ń}�b�s���O�ł���
+- `SubWindow` で収集した点列（DIP）と最小描画属性を、v2ストロークモデル（`Bcf2Stroke` / `Bcf2Point`）へメモリ内でマッピングできる
 
 ## Scope
-- 1�X�g���[�N�m��i�����j���� v2 �X�g���[�N�𐶐����ĕێ�����
-- ������ `ISSUE-005-04` �̍ŏ��Z�b�g�i�P�F�E�Œ葾���E�Œ�M���j���Œ�l�œK�p����
+- 1ストローク確定（離し）時に v2 ストロークを生成して保持する
+- 属性は `ISSUE-005-04` の最小セット（単色・固定太さ・固定筆圧）を固定値で適用する
 
 ## Non-goals
-- JSON�ۑ�/�Ǎ�
-- ��ISF�ϊ�
-- `t` �̌����ȊǗ��i�ŏ����B�_�ł͊ȈՂŉj
+- JSON保存/読込
+- 旧ISF変換
+- `t` の厳密な管理（最小到達点では簡易で可）
 
 ## Mapping
-- �_��
-  - `Point`�iDIP�j -> `Bcf2Point.X/Y`�iDIP�j
-  - `Bcf2Point.Pressure` �͌Œ�l�i��: 0.5�j
-  - `Bcf2Point.T` �͍ŏ����B�_�ł͉��̓��Ԋu�i��: 16ms���݁j
-- ����
+- 点列
+  - `Point`（DIP） -> `Bcf2Point.X/Y`（DIP）
+  - `Bcf2Point.Pressure` は固定値（例: 0.5）
+  - `Bcf2Point.T` は最小到達点では仮の等間隔（例: 16ms刻み）
+- 属性
   - `Bcf2Stroke.Tool`: `"pen"`
-  - `Bcf2Stroke.Color`: `"#FF000000"`�i���j
-  - `Bcf2Stroke.Size`: `2.0`�iDIP�j
+  - `Bcf2Stroke.Color`: `"#FF000000"`（黒）
+  - `Bcf2Stroke.Size`: `2.0`（DIP）
   - `Bcf2Stroke.DeviceKind`: `"mouse"`
 
-## ������
-- ����: �B���i���������j
-  - `SubWindow` �̃X�g���[�N�m�莞�� `Bcf2Stroke` �𐶐����ă��X�g�֕ێ����Ă���
-  - Output�� `[V2] Stroke:` �̃��O���o���A�����m�F�ł���
-  - `CanvasClear()` �ŕێ����Ă��� v2 �X�g���[�N���N���A����
+## 実装状況
+- 現状: 達成（メモリ内）
+  - `SubWindow` のストローク確定時に `Bcf2Stroke` を生成してリストへ保持している
+  - Outputに `[V2] Stroke:` のログを出し、生成確認できる
+  - `CanvasClear()` で保持している v2 ストロークもクリアする
 
 ## Files
 - `SubWindow.xaml.cs` (modify)
@@ -36,8 +36,8 @@
 
 ## Validation
 - manual:
-  1. SubWindow�̃J�[�h�̈��1�X�g���[�N�`��
-  2. Output�� `[V2] Stroke:` ���O���o�āA`points=N` �� `Input Up` �̓_���ƈ�v����
+  1. SubWindowのカード領域で1ストローク描く
+  2. Outputに `[V2] Stroke:` ログが出て、`points=N` が `Input Up` の点数と一致する
 
 ## Risks
-- `t` �̒�`���㑱�ŕύX�ɂȂ� - ��� `Stopwatch` ���֍����ւ���O��ŁA�܂��͌Œ荏�݂Œʂ�
+- `t` の定義が後続で変更になる - 後で `Stopwatch` 等へ差し替える前提で、まずは固定刻みで通す

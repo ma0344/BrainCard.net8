@@ -1,49 +1,49 @@
-# ISSUE-005-04 �`�摮���̍ŏ��Z�b�g���m�肷��i�P�F�E�Œ葾���E�Œ�M���j
+# ISSUE-005-04 描画属性の最小セットを確定する（単色・固定太さ・固定筆圧）
 
 ## Goal
-- �ŏ����B�_�i�_��𑦎��`�悵�A�㑱��PNG���֌q���j�ɕK�v�ȕ`�摮���Z�b�g���m�肵�A�㑱�iISSUE-005-05/005-06�j�̎������f���Œ肷��
+- 最小到達点（点列を即時描画し、後続でPNG化へ繋ぐ）に必要な描画属性セットを確定し、後続（ISSUE-005-05/005-06）の実装判断を固定する
 
 ## Scope
-- v2�X�g���[�N1�{�ɕR�Â��u�`�摮���v���d�l������
-- UI�i�c�[���o�[�j�������ł��A�Œ�l�Ő������鑮�����߂�
+- v2ストローク1本に紐づく「描画属性」を仕様化する
+- UI（ツールバー）未実装でも、固定値で成立する属性を定める
 
 ## Non-goals
-- �u���y��/����/�u���V���
-- �M���J�[�u
-- �y���M���̎��擾�i�㑱�j
+- 蛍光ペン/透明/ブラシ種類
+- 筆圧カーブ
+- ペン筆圧の実取得（後続）
 
-## �ŏ������Z�b�g�iv2�ŕK�{�j
+## 最小属性セット（v2で必須）
 - `color`
-  - �^: RGBA�i0-255�j
-  - �ŏ����B�_: �P�F�Œ�ŉ�
+  - 型: RGBA（0-255）
+  - 最小到達点: 単色固定で可
 - `widthDip`
-  - �^: double
-  - �P��: DIP
-  - �ŏ����B�_: �Œ�l�ŉ�
+  - 型: double
+  - 単位: DIP
+  - 最小到達点: 固定値で可
 - `pressure`
-  - �^: float�i0.0-1.0�j
-  - �ŏ����B�_: ���l�ő��
+  - 型: float（0.0-1.0）
+  - 最小到達点: 一定値で代替
 
-## ����l�i�����l�āj
-- `defaultColor`: `#FF000000`�i���j
-- `defaultWidthDip`: `2.0`�iDIP�j
+## 既定値（初期値案）
+- `defaultColor`: `#FF000000`（黒）
+- `defaultWidthDip`: `2.0`（DIP）
 - `defaultPressure`: `0.5`
 
-## �����g���i�C�Ӂj
-- �_���Ƃ̕M�� `p[i].pressure`
-- �s�����x/�u���y��
-- �u���V���
+## 将来拡張（任意）
+- 点ごとの筆圧 `p[i].pressure`
+- 不透明度/蛍光ペン
+- ブラシ種別
 
-## �㑱Issue�ւ̐ڑ�
-- ���W�n�� `ISSUE-005-03` �̒ʂ�A�_���DIP�ŕێ�����
-- `ISSUE-005-06`�i�����`��j�ł́A�_��+�i�F/��/���M���j�Ń|�����C��/�Z�O�����g�`��ł���΂悢
+## 後続Issueへの接続
+- 座標系は `ISSUE-005-03` の通り、点列はDIPで保持する
+- `ISSUE-005-06`（即時描画）では、点列+（色/幅/一定筆圧）でポリライン/セグメント描画できればよい
 
 ## Acceptance Criteria
-- �����҂��u�ǂ̒l���ǂ��ɌŒ�œ���邩�v�����Ȃ�
-- v2�ۑ����ɕK�{/�C�ӂ̋�ʂ����͂Ŗ��m
+- 実装者が「どの値をどこに固定で入れるか」を迷わない
+- v2保存時に必須/任意の区別が文章で明確
 
 ## Validation
-- review: 5-06�����ŁA�_��+�i�F/��/���M���j�����ŕ`��ł���݌v�ɂȂ��Ă��邱��
+- review: 5-06実装で、点列+（色/幅/一定筆圧）だけで描画できる設計になっていること
 
 ## Risks
-- �Œ�l�I��Ō����ڂ���������/�������� - �����l�͌�Œ����\�ɂ���
+- 固定値選定で見た目が薄すぎる/太すぎる - 初期値は後で調整可能にする

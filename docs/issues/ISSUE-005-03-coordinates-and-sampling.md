@@ -1,57 +1,57 @@
-# ISSUE-005-03 �_��̍��W�n�iDIP�j�ƃT���v�����O���j���m�肷��
+# ISSUE-005-03 点列の座標系（DIP）とサンプリング方針を確定する
 
-## �S�[��
-- �|�C���^���͂Ŏ��W����_�� `p[]` �̍��W�n�� **DIP** �Ƃ��Ċm�肵�A�T���v�����O���j�i�_�̒ǉ������j���d�l������
+## ゴール
+- ポインタ入力で収集する点列 `p[]` の座標系を **DIP** として確定し、サンプリング方針（点の追加条件）を仕様化する
 
-## �X�R�[�v�i��Ɠ��e�j
-- ���W�n
-  - WPF��DPI�X�P�[����SwapChain�i�s�N�Z���j�Ƃ̊֌W�𐮗�����
-  - v2�X�g���[�N���f����̍��W�P�ʂ� **DIP** �ɓ��ꂷ��
-- �T���v�����O
-  - �ړ��C�x���g���ɓ_��ǉ�����i�ŏ��j
-  - �_���剻������邽�߁A�K�v�Ȃ�ŏ�����臒l�iDIP�j��݂���
+## スコープ（作業内容）
+- 座標系
+  - WPFのDPIスケールとSwapChain（ピクセル）との関係を整理する
+  - v2ストロークモデル上の座標単位を **DIP** に統一する
+- サンプリング
+  - 移動イベント毎に点を追加する（最小）
+  - 点列肥大化を避けるため、必要なら最小距離閾値（DIP）を設ける
 
-## ��ΏہiNon-goals�j
-- �X���[�W���O/�x�W�F��
-- ���x�����`t`�̕⊮�i�ʃX�e�b�v�j
+## 非対象（Non-goals）
+- スムージング/ベジェ化
+- 速度推定や`t`の補完（別ステップ）
 
-## ��`
-- DIP�iDevice Independent Pixel�j
-  - WPF�Ɠ����� **1/96 inch** ����Ƃ���_�����W
-- Pixel�i�����𑜓x�j
-  - SwapChain�̃o�b�t�@�T�C�Y�A`WM_*`�̍��W����Ƃ��镨�����W
+## 定義
+- DIP（Device Independent Pixel）
+  - WPFと同じく **1/96 inch** を基準とする論理座標
+- Pixel（物理解像度）
+  - SwapChainのバッファサイズ、`WM_*`の座標が基準とする物理座標
 
-## ����
-- ���W�_�� `p[]` �� `x,y` �� **DIP** �ŕێ�����
-- SwapChain�̃o�b�t�@�T�C�Y�� **Pixel** �ŊǗ�����
+## 決定
+- 収集点列 `p[]` の `x,y` は **DIP** で保持する
+- SwapChainのバッファサイズは **Pixel** で管理する
 
-## �ϊ��̐Ӗ�
-- `DxSwapChainHost`�i`HwndHost`�j
-  - �qHWND���󂯎����W�i��{��Pixel�j���ADPI�X�P�[����p���� **DIP�֕ϊ�**���ď�ʂ֒ʒm����
-  - DPI�擾��WPF��DPI�i`PresentationSource`/`VisualTreeHelper`�����j��D�悵�A�擾�ł��Ȃ��ꍇ�̓t�H�[���o�b�N��p�ӂ���
+## 変換の責務
+- `DxSwapChainHost`（`HwndHost`）
+  - 子HWNDが受け取る座標（基本はPixel）を、DPIスケールを用いて **DIPへ変換**して上位へ通知する
+  - DPI取得はWPFのDPI（`PresentationSource`/`VisualTreeHelper`相当）を優先し、取得できない場合はフォールバックを用意する
 - `SubWindow`
-  - �󂯎����DIP���W�� **���̂܂ܓ_��Ƃ��ĕێ�**����
-  - �`��i�㑱�j��Pixel�ϊ����K�v�ȏꍇ�́A�`�摤�ŏ�������
+  - 受け取ったDIP座標を **そのまま点列として保持**する
+  - 描画（後続）でPixel変換が必要な場合は、描画側で処理する
 
-## �`�摮���Ƃ̊֌W�iISSUE-005-04�j
-- ������ `widthDip` �Ƃ��� **DIP** �Ŏ����A�����ڂ̈�ѐ���D�悷��
-- �M���͍ŏ����B�_�ł͈��l�ő�ւ��A�y�����͓�����ɓ_���Ƃ̕M���֊g������
+## 描画属性との関係（ISSUE-005-04）
+- 線幅は `widthDip` として **DIP** で持ち、見た目の一貫性を優先する
+- 筆圧は最小到達点では一定値で代替し、ペン入力導入後に点ごとの筆圧へ拡張する
 
-## �T���v�����O���j
-- �ŏ����j
-  - **�ړ��C�x���g���ɓ_��ǉ�**���Ă悢
-- �_���剻�̗}���i�����j
-  - ���O�_�Ƃ̋����� `minDistanceDip` �ȏ�̂Ƃ��̂ݓ_��ǉ�����
-  - `minDistanceDip` �����l: **0.5 DIP**�i�b��B��Ń`���[�j���O�\�j
-- �N���b�N�̂݁i�ړ��Ȃ��j
-  - **1�_�X�g���[�N�Ƃ��Ĉ���**�i`Down`���̓_�A�܂���`Up`���̓_�j
+## サンプリング方針
+- 最小方針
+  - **移動イベント毎に点を追加**してよい
+- 点列肥大化の抑制（推奨）
+  - 直前点との距離が `minDistanceDip` 以上のときのみ点を追加する
+  - `minDistanceDip` 初期値: **0.5 DIP**（暫定。後でチューニング可能）
+- クリックのみ（移動なし）
+  - **1点ストロークとして扱う**（`Down`時の点、または`Up`時の点）
 
-## �󂯓���
-- 100%/150% DPI���œ��������ڂ̃h���b�O�������Ƃ��ADIP�̓_�񂪓����X�P�[�����Œ~�ς����
-- �����҂��u�ǂ̍��W��ۑ����f���ɓ����ׂ����v�𔻒f�ł��镶�͉�������
+## 受け入れ基準
+- 100%/150% DPI環境で同じ見た目のドラッグをしたとき、DIPの点列が同じスケール感で蓄積される
+- 実装者が「どの座標を保存モデルに入れるべきか」を判断できる文章化がある
 
-## ����
-- review: DPI 100%/150% ���œ����`�悪���������ڃT�C�Y�ɂȂ�O�񂪐��藧���Ƃ����r���[����
+## 検証
+- review: DPI 100%/150% 等で同じ描画が同じ見た目サイズになる前提が成り立つことをレビューする
 
-## ���X�N
-- �����ɍ��W�n�����ƑS�ۑ��f�[�^�̌݊��ɉe�� - DIP��ŌŒ肵�A�K�v�Ȃ�`�掞�ɕϊ�����
+## リスク
+- 早期に座標系を誤ると全保存データの互換に影響 - DIP基準で固定し、必要なら描画時に変換する
