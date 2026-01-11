@@ -151,6 +151,8 @@ namespace BrainCard
 
         public List<Bcf2Stroke> V2Strokes { get; } = new();
 
+        public BrainCard.Legacy.LegacyInkAttachment LegacyInk { get; set; }
+
         public void SetV2Strokes(IReadOnlyList<Bcf2Stroke> strokes)
         {
             V2Strokes.Clear();

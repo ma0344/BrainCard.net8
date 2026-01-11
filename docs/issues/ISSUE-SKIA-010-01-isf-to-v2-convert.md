@@ -1,31 +1,44 @@
-# ISSUE-SKIA-010-01 旧ISF（InkStroke）をv2ストロークへ変換する
+# ISSUE-SKIA-010-01 旧ISF（InkData/ISF bytes）をv2ストロークへ変換する
 
 ## Goal
-- 旧`.bcf`内のISF（`InkStrokeContainer`）からストローク点列（x,y,pressure,t）と描画属性を抽出し、v2ストロークへ変換して内部表現を統一できる
+- 旧`.bcf`内のISF（`InkData`から得られるISFバイト列）からストローク点列（x,y,pressure,t）と描画属性を抽出し、v2ストロークへ変換して内部表現を統一できる
+
+## Decision
+- XAML Islandsは無効（`BRAIN_CARD_DISABLE_XAML_ISLANDS`）で進めるため、WinRTの`InkStrokeContainer`/`InkStroke`には依存しない
+- 入力は Step9 で保持した `Card.LegacyInk.IsfBytes` を起点とする
+- 復元品質は「Skiaで可能な限り同等の品質」を目標とし、差分が出る場合は既知制約として管理する
 
 ## Non-goals
 - v2保存/読込（Step7）
 - 消しゴム（Step11）
-- スムージング
+- スムージング（最初は無し。必要なら別Issue）
 
 ## Scope
-- `InkStrokeContainer.LoadAsync()` で復元した `InkStroke` を走査
+- ISF bytes からストローク情報を抽出する
 - 変換する情報
   - 点列: `x,y`（DIP基準キャンバスへ整合）
-  - `pressure`
+  - `pressure`（取得できない場合は既定値）
   - `t`
-    - ISFから取得できない場合は速度推定で補完（相対ms、開始=0）
+    - ISFから取得できない場合は補完（相対ms、開始=0）
   - 描画属性
     - color, size, opacity, tool（ペン/蛍光）等（取得可能な範囲）
 - 変換後は Card の `V2Strokes` へ格納できる
+- PNGキャッシュが無いカードは、復元したストロークからPNG生成して既存表示経路に乗せる（詳細は子Issueへ）
+
+## Child Issues (planned)
+- `ISSUE-SKIA-010-01-01-isf-parse-and-extract` - ISF bytes から点列/属性を抽出
+- `ISSUE-SKIA-010-01-02-attribute-and-pressure-mapping` - ツール/色/太さ/筆圧のマッピング
+- `ISSUE-SKIA-010-01-03-time-reconstruction` - `t` の補完（単調増加の相対ms）
+- `ISSUE-SKIA-010-01-04-skiasharp-render-parity` - Skia描画での同等品質目標の実装
+- `ISSUE-SKIA-010-01-05-png-generation-from-restored` - 復元ストロークからPNG生成
 
 ## Acceptance Criteria
 - 旧`.bcf`を読み込んだ際、カードごとにv2ストロークが生成されて保持される（少なくとも点列が入る）
 - `t` が得られない場合でも、単調増加の相対msとして補完される
-- 変換結果でSubWindowが再描画できる土台ができる（表示そのものは別Issueでも可）
+- PNGキャッシュが無いカードでも、Skia復元によりpreview表示まで到達できる（品質は「可能な限り同等」）
 
 ## Files (expected)
-- `MainWindow.xaml.cs` (modify) - legacy読み込み後に変換を呼ぶ
+- `MainWindow.xaml.cs` (modify) - legacy読み込み後に変換を呼ぶ/PNGキャッシュ無い場合の生成経路を追加
 - `Models/FileFormatV2/*` (modify if needed)
 - 変換ユーティリティ（新規ファイルの可能性）
 
@@ -34,7 +47,9 @@
 - manual:
   1. ISFを含む旧`.bcf`をロード
   2. 1枚以上のカードで `V2Strokes.Count > 0` を確認
+  3. PNGキャッシュを削除したカードも表示されることを確認
 
 ## Risks
+- ISF解析仕様が不確定 - まず最小復元（点列と太さ）から始め、属性は段階的に拡張する
 - 座標系/スケール差 - 既存カードPNG生成時のスケール規則と合わせる
 - t補完の品質 - 最初は等間隔16msでも許容し、後で速度推定へ置換する
