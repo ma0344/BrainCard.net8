@@ -252,7 +252,7 @@ namespace BrainCard.ViewModels
         {
             get
             {
-                var name = string.IsNullOrWhiteSpace(CurrentFileName) ? "Untitled.bcf" : Path.GetFileName(CurrentFileName);
+                var name = string.IsNullOrWhiteSpace(CurrentFileName) ? "Untitled.bcf2" : Path.GetFileName(CurrentFileName);
                 return IsNewFile ? $"BrainCard - {name}（新規）" : $"BrainCard - {name}";
             }
         }

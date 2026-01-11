@@ -75,10 +75,10 @@
    - `Assets`（PNGキャッシュ）フォルダ運用を継続する
    - ✅ SaveAsで既存ファイルに保存した場合のAssets残留をクリーンアップする `docs/issues/ISSUE-SKIA-007-03-clean-assets-on-save.md`
 
-8. **保存時に新拡張子へ強制する**
-   - 旧拡張子（`.bcf`）での保存・上書きを禁止する `docs/issues/ISSUE-SKIA-008-01-force-bcf2-save.md`
-   - 旧ファイルを開いて保存する場合は必ず「名前を付けて保存」で新拡張子を提示する
-   - UI文言（メッセージ/フィルタ）を更新する
+8. ✅ **保存時に新拡張子へ強制する**
+   - ✅ 旧拡張子（`.bcf`）での保存・上書きを禁止する `docs/issues/ISSUE-SKIA-008-01-force-bcf2-save.md`
+   - ✅ 旧ファイルを開いて保存する場合は必ず「名前を付けて保存」で新拡張子を提示する
+   - ✅ UI文言（メッセージ/フィルタ）を更新する
 
 9. **旧`.bcf` 読み込み経路を分離する**
    - 旧`.bcf` 読み込み処理を残す（互換読み込み） `docs/issues/ISSUE-SKIA-009-01-legacy-bcf-read-split.md`

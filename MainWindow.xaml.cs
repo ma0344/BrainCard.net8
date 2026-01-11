@@ -87,7 +87,7 @@ namespace BrainCard
             }
             else
             {
-                vm.CurrentFileName = "Untitled.bcf";
+                vm.CurrentFileName = "Untitled.bcf2";
                 vm.IsNewFile = true;
             }
 
@@ -877,10 +877,17 @@ namespace BrainCard
         // SplitView : セーブボタン : 新規保存をクリックしたときの処理
         private void SaveAs_Click(object sender, RoutedEventArgs e)
         {
+            var suggestedFileName = vm?.CurrentFileName;
+            if (!string.IsNullOrWhiteSpace(suggestedFileName) &&
+                string.Equals(Path.GetExtension(suggestedFileName), ".bcf", StringComparison.OrdinalIgnoreCase))
+            {
+                suggestedFileName = Path.ChangeExtension(suggestedFileName, ".bcf2");
+            }
+
             var saveFileDialog = new Microsoft.Win32.SaveFileDialog
             {
-                FileName = vm?.CurrentFileName,
-                Filter = "Brain Card v2 files (*.bcf2)|*.bcf2|Brain Card files (*.bcf)|*.bcf",
+                FileName = suggestedFileName,
+                Filter = "Brain Card v2 files (*.bcf2)|*.bcf2",
                 DefaultExt = ".bcf2",
                 AddExtension = true
             };
@@ -909,6 +916,14 @@ namespace BrainCard
         {
 
             if (vm != null && vm.IsNewFile)
+            {
+                SaveAs_Click(sender, e);
+                return;
+            }
+
+            var currentFile = vm?.CurrentFileName;
+            if (!string.IsNullOrWhiteSpace(currentFile) &&
+                string.Equals(Path.GetExtension(currentFile), ".bcf", StringComparison.OrdinalIgnoreCase))
             {
                 SaveAs_Click(sender, e);
                 return;
@@ -1302,7 +1317,7 @@ namespace BrainCard
                     var card = new Card(this, inkCanvas: null, imageSource);
                     card.Id = savedImage.Id;
                     card.Left = savedImage.X;
-                    card.Top = 0;
+                    card.Top = savedImage.Y;
                     card.Z = savedImage.Z;
                     card.SetText(savedImage.RecogText);
 
@@ -2218,6 +2233,10 @@ namespace BrainCard
 
         [DataMember]
         public double X { get; set; }
+
+        [DataMember]
+        public double Y { get; set; }
+
         [DataMember]
         public int Z { get; set; }
         [DataMember]

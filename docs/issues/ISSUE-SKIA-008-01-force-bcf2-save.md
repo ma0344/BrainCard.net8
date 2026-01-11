@@ -32,3 +32,25 @@
 
 ## Risks
 - 既存の未実装SaveStateと衝突 - 現状仕様（保存は未実装）を保ちつつ、拡張子の分岐だけ先行して入れる
+
+## Parent / Child Issues
+- `ISSUE-SKIA-008-01-01-saveas-bcf2-only` - SaveAsで`.bcf`を選べないようにする
+- `ISSUE-SKIA-008-01-02-prevent-overwrite-bcf` - `.bcf`を開いているときの上書き保存をSaveAsへ誘導する
+- `ISSUE-SKIA-008-01-03-title-default-bcf2` - 新規作成時の既定ファイル名とタイトル表記を`.bcf2`へ寄せる
+
+## Notes (current)
+- `MainWindow.xaml.cs` の `SaveAs_Click` は `DefaultExt = ".bcf2"` になっているが、Filterに`.bcf`が残っているためUI上で`.bcf`保存が可能
+- `OverWrite_Click` は拡張子判定が無く、`.bcf`を開いている場合でもそのまま保存できてしまう
+- 新規時の既定ファイル名は `Untitled.bcf` のため、v2強制方針とタイトル表示が不整合になりうる
+
+## Status
+- Closed
+
+## Child Issue Status
+- Closed: ISSUE-SKIA-008-01-01-saveas-bcf2-only
+- Closed: ISSUE-SKIA-008-01-02-prevent-overwrite-bcf
+- Closed: ISSUE-SKIA-008-01-03-title-default-bcf2
+
+## Validation Results
+- build: `dotnet build` (pass)
+- manual: pass
