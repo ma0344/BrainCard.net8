@@ -1,7 +1,10 @@
 {
   "profiles": {
     "BrainCard": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "environmentVariables": {
+        "BRAIN_CARD_INK_DUMP_DIR": "C:\\Users\\ma\\source\\repos\\BrainCard.net8"
+      }
     }
   }
 }

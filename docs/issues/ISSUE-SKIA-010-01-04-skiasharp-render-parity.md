@@ -18,9 +18,18 @@
   その後「白（閾値つき）→透明化」の後処理を行ってPNGキャッシュとして保存していた。
 - ただし将来的にカード背景色を選択可能にする想定があるため、PNG生成で背景色を白で固定する方式は採用しない。
 - Skia側では背景を固定せず、透過PNGのまま合成（BlendMode）で蛍光ペンの見た目を近似する。
-  - 実装: `canvas.SaveLayer(...)` + 蛍光ペン専用 `BlendMode`（初期値は `Multiply`）
+  - 実装: `canvas.SaveLayer(...)` + 蛍光ペン専用 `BlendMode`
   - alpha: 既存互換のため蛍光ペンは最大alphaを160に制限
-  - `Bcf2Stroke.Opacity` をSkia描画で反映する（高lighter/通常ペン共通）
+  - `Bcf2Stroke.Opacity` をSkia描画で反映する（highlighter/通常ペン共通）
+- 調整方針:
+  - 重なりが濃くなりすぎる場合、`Multiply` ではなく `SrcOver` などへ寄せる（比較対象の6枚で確認しながら選定）。
+
+### StrokeCap（ストローク端の形状）の方針
+- `SKStrokeCap.Round` は端点が丸くなるため、点列をそのまま線分で結ぶ実装だと「端点が丸い塊」に見えることがある。
+- 端点の塊感を抑えるため、キャップ形状自体を変えるのではなく、端点近傍のみ線幅を細くする（taper）を導入する。
+  - 実装例: 先頭/末尾の数セグメント（例: 3）だけ線幅倍率を `0.35..1.0` で補間
+  - これにより、capがRoundでも端点が自然に細って消える見え方に寄せられる
+- 段階導入: 比較対象の6枚で確認し、taper区間や最小倍率を調整する。
 
 ## Acceptance Criteria
 - 旧`.bcf`でPNGキャッシュを欠損させても、Skia描画したプレビューが生成され表示できる
@@ -28,7 +37,7 @@
 - 蛍光ペンストロークが空PNGにならない
 
 ## Files
-- `BrainCard/Legacy/LegacyPngRenderer.cs` (modify) - v2ストロークのPNG生成（highlighter合成、opacity反映）
+- `BrainCard/Legacy/LegacyPngRenderer.cs` (modify) - v2ストロークのPNG生成（highlighter合成、opacity反映、taper）
 - Skia描画ユーティリティ (new|modify)
 - `MainWindow.xaml.cs` もしくは `Card` 周辺（表示経路）(modify)
 
@@ -38,6 +47,7 @@
   1. 旧`.bcf`をロード
   2. PNGキャッシュを削除したカードが（Skia生成で）表示される
   3. highlighterを含むカードでもプレビューが生成される
+  4. ストローク端の塊感が軽減されている
 
 ## Risks
-- 見た目差分 - サンプルファイルを固定して比較し、BlendMode/alpha/opacityを段階導入する
+- 見た目差分 - サンプルファイルを固定して比較し、BlendMode/alpha/opacity/stroke端点(taper)を段階導入する

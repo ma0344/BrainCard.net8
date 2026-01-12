@@ -1055,8 +1055,8 @@ namespace BrainCard
         {
             var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
-                Filter = "Brain Card v2 files (*.bcf2)|*.bcf2|Brain Card files (*.bcf)|*.bcf",
-                DefaultExt = ".bcf2"
+                Filter = "Brain Card All Version files (*.bcf*)|*.bcf*|Brain Card v2 files (*.bcf2)|*.bcf2|Brain Card files (*.bcf)|*.bcf",
+                DefaultExt = ".bcf*"
             };
 
             if (openFileDialog.ShowDialog() == true)
@@ -1326,6 +1326,26 @@ namespace BrainCard
 #if BRAIN_CARD_ENABLE_WINRT_INK
                         var v2 = await LegacyInkToV2Converter.TryConvertIsfBytesToV2StrokesAsync(isfBytes);
                         card.SetV2Strokes(v2);
+
+                        // Optional: dump raw InkStrokeContainer for comparison (env var gated)
+                        try
+                        {
+                            var dumpDir = Environment.GetEnvironmentVariable("BRAIN_CARD_INK_DUMP_DIR");
+                            if (!string.IsNullOrWhiteSpace(dumpDir))
+                            {
+                                var container = await LegacyIsfRestore.TryRestoreInkStrokeContainerAsync(savedImage.InkData);
+                                if (container != null)
+                                {
+                                    var dumpPath = System.IO.Path.Combine(dumpDir, $"{savedImage.Id}.ink.json");
+                                    LegacyInkDump.DumpToFile(container, dumpPath);
+                                    Debug.WriteLine($"[LegacyISF] ink dump: id={savedImage.Id} path={dumpPath}");
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[LegacyISF] ink dump skipped: id={savedImage.Id} ex={ex}");
+                        }
 
                         var first = v2?.FirstOrDefault();
                         var t0 = first?.Points?.FirstOrDefault()?.T;
