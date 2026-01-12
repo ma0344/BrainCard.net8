@@ -27,6 +27,7 @@ using System.Windows.Threading;
 using static BrainCard.Values;
 using forms = System.Windows.Forms;
 using ui = ModernWpf.Controls;
+using Windows.UI.Input.Inking;
 
 #if !BRAIN_CARD_DISABLE_XAML_ISLANDS
 using MyUWPApp;
@@ -1304,11 +1305,8 @@ namespace BrainCard
                     var cachedPngPath = GetCardPngPath(filename, savedImage.Id);
                     ImageSource imageSource = TryLoadPng(cachedPngPath);
 
-                    // 仕様: PNGキャッシュが無いカードは読み込まない（後でWin2Dから生成する）
-                    if (imageSource == null)
-                    {
-                        continue;
-                    }
+                    // PNGキャッシュ欠損時は、ISF→v2→Skia描画でフォールバック生成する
+                    var needsRegeneratePng = imageSource == null;
 
                     // Inkは現状ダミー（Win2D移行後にv2 strokeへ統一して復元する）
                     var card = new Card(this, inkCanvas: null, imageSource);
@@ -1325,16 +1323,58 @@ namespace BrainCard
 
                         Debug.WriteLine($"[LegacyISF] decode {(isfBytes == null ? "skipped" : "ok")}: id={savedImage.Id}");
 
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
-                        var restored = await LegacyIsfRestore.TryRestoreInkStrokeContainerAsync(savedImage.InkData);
-                        Debug.WriteLine($"[LegacyISF] restore {(restored == null ? "skipped" : "ok")}: id={savedImage.Id}");
+#if BRAIN_CARD_ENABLE_WINRT_INK
+                        var v2 = await LegacyInkToV2Converter.TryConvertIsfBytesToV2StrokesAsync(isfBytes);
+                        card.SetV2Strokes(v2);
+
+                        var first = v2?.FirstOrDefault();
+                        var t0 = first?.Points?.FirstOrDefault()?.T;
+                        var tLast = first?.Points?.LastOrDefault()?.T;
+                        Debug.WriteLine($"[LegacyISF] v2strokes ok: id={savedImage.Id} count={v2?.Count ?? 0} tool={first?.Tool} color={first?.Color} size={first?.Size} t0={t0} tLast={tLast}");
+
+                        if (needsRegeneratePng)
+                        {
+                            try
+                            {
+                                var pngBytes = LegacyPngRenderer.RenderPng(card.V2Strokes, (int)cardWidth, (int)cardHeight);
+                                if (pngBytes != null && pngBytes.Length > 0)
+                                {
+                                    var dir = Path.GetDirectoryName(cachedPngPath);
+                                    if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
+                                    File.WriteAllBytes(cachedPngPath, pngBytes);
+
+                                    imageSource = TryLoadPng(cachedPngPath);
+                                    card.CardImage.Source = imageSource;
+
+                                    Debug.WriteLine($"[LegacyPNG] regenerated: id={savedImage.Id} path={cachedPngPath}");
+                                }
+                                else
+                                {
+                                    Debug.WriteLine($"[LegacyPNG] regenerate skipped (empty png): id={savedImage.Id}");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.WriteLine($"[LegacyPNG] regenerate failed: id={savedImage.Id} ex={ex}");
+                            }
+                        }
 #else
-                        Debug.WriteLine($"[LegacyISF] restore skipped (BRAIN_CARD_DISABLE_XAML_ISLANDS): id={savedImage.Id}");
+                        Debug.WriteLine($"[LegacyISF] v2strokes skipped (BRAIN_CARD_ENABLE_WINRT_INK not set): id={savedImage.Id}");
+                        if (needsRegeneratePng)
+                        {
+                            Debug.WriteLine($"[LegacyPNG] regenerate skipped (BRAIN_CARD_ENABLE_WINRT_INK not set): id={savedImage.Id}");
+                        }
 #endif
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[LegacyISF] restore failed: id={savedImage.Id} ex={ex}");
+                        Debug.WriteLine($"[LegacyISF] v2strokes failed: id={savedImage.Id} ex={ex}");
+                    }
+
+                    // 生成できなかったカードはスキップ（既存挙動を維持）
+                    if (card.CardImage?.Source == null)
+                    {
+                        continue;
                     }
 
                     Canvas.SetLeft(card, card.Left);
@@ -1373,7 +1413,7 @@ namespace BrainCard
         }
 
         // SplitView : ロードボタン : Json文字列をInkStrokeContainerに変換
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
+#if BRAIN_CARD_ENABLE_WINRT_INK
         private async Task<InkStrokeContainer> DeserializeStrokes(string json)
         {
             var isfData = JsonConvert.DeserializeObject<byte[]>(json);
@@ -2085,7 +2125,7 @@ namespace BrainCard
                 bmp.Freeze();
                 return bmp;
             }
-            catch
+ catch
             {
                 return null;
             }

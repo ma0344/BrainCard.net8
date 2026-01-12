@@ -4,7 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
+#if BRAIN_CARD_ENABLE_WINRT_INK
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Storage.Streams;
 using Windows.UI.Input.Inking;
@@ -49,7 +49,7 @@ public static class LegacyIsfRestore
         }
     }
 
-#if !BRAIN_CARD_DISABLE_XAML_ISLANDS
+#if BRAIN_CARD_ENABLE_WINRT_INK
     public static async Task<InkStrokeContainer> TryRestoreInkStrokeContainerAsync(string inkData)
     {
         var bytes = TryDecodeInkDataToBytes(inkData);
