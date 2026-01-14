@@ -2245,6 +2245,97 @@ namespace BrainCard
             CancelEditing();
         }
 
+        private void ClearCacheButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Backward-compat (if any XAML still references this)
+            ClearPngCacheAndRefresh(clearNoiseCache: true);
+        }
+
+        private void ClearCacheSplitButton_Click(ui.SplitButton sender, ui.SplitButtonClickEventArgs args)
+        {
+            // Default: PNG only
+            ClearPngCacheAndRefresh(clearNoiseCache: false);
+        }
+
+        private void ClearCachePngOnlyMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            ClearPngCacheAndRefresh(clearNoiseCache: false);
+        }
+
+        private void ClearCachePngAndNoiseMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            ClearPngCacheAndRefresh(clearNoiseCache: true);
+        }
+
+        private void ClearPngCacheAndRefresh(bool clearNoiseCache)
+        {
+            if (vm?.IsLoading == true) return;
+
+            if (clearNoiseCache)
+            {
+                try
+                {
+                    PencilBrushTexture.ClearCache();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[Cache] PencilBrushTexture.ClearCache failed: {ex}");
+                }
+            }
+
+            var currentFile = vm?.CurrentFileName;
+            var assetsDir = GetAssetsDirectory(currentFile);
+            var deleted = 0;
+
+            if (!string.IsNullOrWhiteSpace(assetsDir) && Directory.Exists(assetsDir))
+            {
+                try
+                {
+                    foreach (var path in Directory.EnumerateFiles(assetsDir, "*.png", SearchOption.TopDirectoryOnly))
+                    {
+                        try
+                        {
+                            File.Delete(path);
+                            deleted++;
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[Cache] Delete skipped: path={path} ex={ex}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[Cache] Enumerate/Delete assets png failed: dir={assetsDir} ex={ex}");
+                }
+            }
+
+            // Reload if the images still exist. If deleted, we keep current images (do not blank cards).
+            try
+            {
+                foreach (var card in CardList)
+                {
+                    if (card == null || string.IsNullOrWhiteSpace(card.Id)) continue;
+
+                    var pngPath = GetCardPngPath(currentFile, card.Id);
+                    var img = TryLoadPng(pngPath);
+                    if (img != null)
+                    {
+                        card.CardImage.Source = img;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Cache] Reload card images failed: {ex}");
+            }
+
+            var modeText = clearNoiseCache ? "PNG+ノイズ" : "PNG";
+            StatusBarMessageTextBlock.Text = deleted > 0
+                ? $"キャッシュをクリアしました（{modeText} / png削除 {deleted} 件）"
+                : $"キャッシュをクリアしました（{modeText}）";
+            StatusbarTimer_start();
+        }
     }
 
     public enum AddMode
@@ -2380,3 +2471,7 @@ namespace BrainCard
         }
     }
 }
+
+
+
+

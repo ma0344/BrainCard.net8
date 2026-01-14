@@ -34,12 +34,42 @@ public static class LegacyInkToV2Converter
     {
         try
         {
-            // Pencil/pen/highlighterなどの厳密マッピングは後続Issue。
-            // まずはhighlighterを判別できる範囲で対応し、他はpen。
             var da = stroke?.DrawingAttributes;
-            if (da != null && da.DrawAsHighlighter)
+            if (da != null)
             {
-                return "highlighter";
+                // Primary: UWP highlighter flag.
+                if (da.DrawAsHighlighter)
+                {
+                    return "highlighter";
+                }
+
+                // Fallback: some data sets may lose DrawAsHighlighter but keep rectangle tip.
+                try
+                {
+                    if (da.PenTip == PenTipShape.Rectangle)
+                    {
+                        return "highlighter";
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
+
+                // Pencil is exposed via Kind in this project.
+                try
+                {
+                    if (da.Kind == InkDrawingAttributesKind.Pencil)
+                    {
+                        return "pencil";
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
+
+                return "pen";
             }
         }
         catch

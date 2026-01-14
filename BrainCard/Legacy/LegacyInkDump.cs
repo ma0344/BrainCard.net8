@@ -20,12 +20,18 @@ public static class LegacyInkDump
     public sealed class InkDumpStroke
     {
         public string Tool { get; set; }
+        public string Kind { get; set; }
         public bool DrawAsHighlighter { get; set; }
+        public bool? IgnorePressure { get; set; }
+        public bool? FitToCurve { get; set; }
         public string Color { get; set; }
+        public byte? ColorA { get; set; }
         public double SizeWidth { get; set; }
         public double SizeHeight { get; set; }
         public string PenTip { get; set; }
         public double? PenTipTransformM11 { get; set; }
+        public double? PenTipTransformM12 { get; set; }
+        public double? PenTipTransformM21 { get; set; }
         public double? PenTipTransformM22 { get; set; }
         public List<InkDumpPoint> Points { get; set; } = new();
     }
@@ -43,7 +49,6 @@ public static class LegacyInkDump
     public static string DumpToJson(InkStrokeContainer container)
     {
         var root = new InkDumpRoot();
-        var strokes = container.GetStrokes();
         if (container != null)
         {
             foreach (var stroke in container.GetStrokes())
@@ -57,15 +62,23 @@ public static class LegacyInkDump
                     if (da != null)
                     {
                         s.DrawAsHighlighter = da.DrawAsHighlighter;
+                        s.IgnorePressure = da.IgnorePressure;
+                        s.FitToCurve = da.FitToCurve;
+
                         s.Color = ToHexArgb(da.Color);
+                        s.ColorA = da.Color.A;
+
                         s.SizeWidth = da.Size.Width;
                         s.SizeHeight = da.Size.Height;
                         s.PenTip = da.PenTip.ToString();
+                        s.Kind = da.Kind.ToString();
 
                         try
                         {
                             var m = da.PenTipTransform;
                             s.PenTipTransformM11 = m.M11;
+                            s.PenTipTransformM12 = m.M12;
+                            s.PenTipTransformM21 = m.M21;
                             s.PenTipTransformM22 = m.M22;
                         }
                         catch
@@ -98,7 +111,18 @@ public static class LegacyInkDump
                 }
 
                 // Tool label as a hint (best-effort)
-                s.Tool = s.DrawAsHighlighter ? "highlighter" : "pen";
+                if (s.DrawAsHighlighter || string.Equals(s.PenTip, "Rectangle", StringComparison.OrdinalIgnoreCase))
+                {
+                    s.Tool = "highlighter";
+                }
+                else if (string.Equals(s.Kind, "Pencil", StringComparison.OrdinalIgnoreCase))
+                {
+                    s.Tool = "pencil";
+                }
+                else
+                {
+                    s.Tool = "pen";
+                }
 
                 root.Strokes.Add(s);
             }

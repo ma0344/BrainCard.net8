@@ -451,17 +451,35 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <Button x:Name="ClearAllButton"
                                             Grid.Column="0"
                                             Content="{DynamicResource ClearButtonContent}"
-                                            Margin="0,20,0,20"
+                                            Margin="0,20,5,20"
                                             Click="ClearAllButton_Click"
                                             Height="50"
                                             HorizontalAlignment="Stretch"
                                             VerticalAlignment="Center" />
+                                    <ui:SplitButton x:Name="ClearCacheSplitButton"
+                                                    Grid.Column="1"
+                                                    HorizontalAlignment="Right"
+                                                    Height="50"
+                                                    MinWidth="160"
+                                                    Margin="0,20,0,20"
+                                                    Click="ClearCacheSplitButton_Click"
+                                                    Content="キャッシュクリア">
+                                        <ui:SplitButton.Flyout>
+                                            <ui:MenuFlyout>
+                                                <MenuItem Header="PNGのみクリア"
+                                                          Click="ClearCachePngOnlyMenuItem_Click" />
+                                                <MenuItem Header="PNG + ノイズもクリア"
+                                                          Click="ClearCachePngAndNoiseMenuItem_Click" />
+                                            </ui:MenuFlyout>
+                                        </ui:SplitButton.Flyout>
+                                    </ui:SplitButton>
                                     <ui:ToggleSwitch x:Name="CardCanvasVisibleSwitch"
-                                                     Grid.Column="1"
+                                                     Grid.Column="2"
                                                      IsOn="True"
                                                      Width="120"
                                                      HorizontalAlignment="Right"

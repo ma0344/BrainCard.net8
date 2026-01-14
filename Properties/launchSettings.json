@@ -3,7 +3,16 @@
     "BrainCard": {
       "commandName": "Project",
       "environmentVariables": {
-        "BRAIN_CARD_INK_DUMP_DIR": "C:\\Users\\ma\\source\\repos\\BrainCard.net8"
+        "BRAIN_CARD_INK_DUMP_DIR": "C:\\Users\\ma\\source\\repos\\BrainCard.net8\\JsonDump",
+        "BRAIN_CARD_SKIA_DUMP_DIR": "C:\\Users\\ma\\source\\repos\\BrainCard.net8\\Dump",
+        "BRAIN_CARD_PENCIL_STAMP_DUMP": "",
+        "BRAIN_CARD_PENCIL_STAMP_DUMP_ALPHA_BOOST": "",
+        "BRAIN_CARD_PENCIL_DISABLE_NOISE": "",
+        "BRAIN_CARD_PENCIL_FIXED_NOISE_PHASE": "",
+        "BRAIN_CARD_PENCIL_STEP_SCALE": "",
+        "BRAIN_CARD_PENCIL_MIN_STEP_PX": "",
+        "BRAIN_CARD_PENCIL_DISABLE_RADIAL_MASK": "0",
+        "BRAIN_CARD_PENCIL_ENABLE_RADIAL_MASK": "0"
       }
     }
   }

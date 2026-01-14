@@ -51,3 +51,25 @@
 
 ## Risks
 - 見た目差分 - サンプルファイルを固定して比較し、BlendMode/alpha/opacity/stroke端点(taper)を段階導入する
+
+---
+
+## 現状メモ（2026-01）
+
+### Hot Reload時の見た目差分について
+- 既存カード表示は `*.bcf2.Assets\\<cardId>.png` のPNGキャッシュ参照のため、レンダラー（`LegacyPngRenderer` 等）をHot Reloadで変更しても、表示は即時反映されない。
+- 開発時の差分確認は「PNGキャッシュ削除 → 再生成トリガ → 表示更新」が必要。
+
+### キャッシュクリアUI（実装済み）
+- `MainWindow` にキャッシュクリア用の `ui:SplitButton` を追加。
+  - デフォルトクリック: PNGのみクリア
+  - Flyout: PNGのみ / PNG+ノイズ（`PencilBrushTexture.ClearCache()`）
+- 目的: Hot Reload後の描画調整を検証しやすくする（PNGキャッシュとPencilノイズの両レイヤーを明示的にクリア可能）。
+
+### 次課題（未対応）
+- Pencilストローク周囲に「描画方向に平行な線（ストライプ/バンディング）」が入るケースの解消。
+  - 原因候補: ノイズテクスチャの生成/適用方法、アルファ8の量子化、ブレンド/フィルタ、ブラシスタンプ間隔。
+  - 主要調査対象: `BrainCard/Legacy/LegacyPngRenderer.cs` と `BrainCard/Legacy/PencilBrushTexture.cs`
+- `Bcf2Point.Pressure` に応じて描画の濃さ（不透明度）を減衰させる。
+  - まずはペン/鉛筆のalphaを `pressure` で乗算する方針。
+  - 併せて線幅の圧力対応を行うかは別途判断。
