@@ -15,6 +15,9 @@ internal static class PencilBrushTexture
 
     private static int _dumpedSize = -1;
 
+    // Mosaic-like grain: block size in source noise pixels.
+    private const int MosaicBlockPx = 6;
+
     public static void ClearCache()
     {
         lock (Gate)
@@ -67,48 +70,34 @@ internal static class PencilBrushTexture
 
         var rnd = new Random(seed);
 
-        // Simple value-noise with a light blur via neighborhood averaging.
-        // This avoids harsh salt-and-pepper.
-        Span<byte> raw = sizePx * sizePx <= 0 ? Span<byte>.Empty : new byte[sizePx * sizePx];
+        // Mosaic/block noise: each block shares a constant alpha value.
+        // This matches the legacy "mosaic-like" grain better than smooth Perlin/value noise.
+        var block = Math.Clamp(MosaicBlockPx, 1, sizePx);
 
-        for (var y = 0; y < sizePx; y++)
+        for (var by = 0; by < sizePx; by += block)
         {
-            for (var x = 0; x < sizePx; x++)
+            for (var bx = 0; bx < sizePx; bx += block)
             {
-                // Bias toward low alpha; pencil should be mostly transparent spec.
-                // Use squared random to increase probability of small values.
+                // Pick one alpha per block.
+                // Bias toward low alpha, but keep discrete steps.
                 var r = rnd.NextDouble();
-                var v = r * r;
-                var a = (byte)Math.Clamp((int)Math.Round(v * 255.0), 0, 255);
-                raw[y * sizePx + x] = a;
-            }
-        }
+                var v = Math.Pow(r, 1.2); // slightly low-biased
 
-        // 1-pass box blur (3x3) into bitmap.
-        for (var y = 0; y < sizePx; y++)
-        {
-            for (var x = 0; x < sizePx; x++)
-            {
-                var sum = 0;
-                var count = 0;
+                // Quantize to a few levels to emphasize mosaic steps.
+                const int levels = 8;
+                var q = Math.Round(v * (levels - 1)) / (levels - 1);
+                var a = (byte)Math.Clamp((int)Math.Round(q * 255.0), 0, 255);
 
-                for (var oy = -1; oy <= 1; oy++)
+                var yMax = Math.Min(sizePx, by + block);
+                var xMax = Math.Min(sizePx, bx + block);
+
+                for (var y = by; y < yMax; y++)
                 {
-                    var yy = y + oy;
-                    if ((uint)yy >= (uint)sizePx) continue;
-
-                    for (var ox = -1; ox <= 1; ox++)
+                    for (var x = bx; x < xMax; x++)
                     {
-                        var xx = x + ox;
-                        if ((uint)xx >= (uint)sizePx) continue;
-
-                        sum += raw[yy * sizePx + xx];
-                        count++;
+                        bmp.SetPixel(x, y, new SKColor(0, 0, 0, a));
                     }
                 }
-
-                var a = (byte)(count == 0 ? 0 : (sum / count));
-                bmp.SetPixel(x, y, new SKColor(0, 0, 0, a));
             }
         }
 

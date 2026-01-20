@@ -44,7 +44,7 @@ public static class LegacyPngRenderer
     private const int PencilMaxStepsPerSegment = 512;
 
     // Pencil texture: base size for the cached noise bitmap.
-    private const int PencilNoiseTextureSizePx = 128;
+    private const int PencilNoiseTextureSizePx = 512;
 
     // Pencil: observation (legacy output) pressure→visible dot diameter(px)
     // SizeHeight=24
@@ -55,16 +55,40 @@ public static class LegacyPngRenderer
     [
         (0.01, 5.0 / 24.0),
         (0.05, 7.0 / 24.0),
-        (0.10, 8.0 / 24.0),
-        (0.20, 13.0 / 24.0),
-        (0.30, 18.0 / 24.0),
-        (0.40, 23.0 / 24.0),
+        (0.08, 8.0 / 24.0),
+        (0.10, 27.0 / 24.0),
+        (0.15, 27.5 / 24.0),
+        (0.20, 28.0 / 24.0),
+        (0.30, 28.0 / 24.0),
+        (0.40, 28.0 / 24.0),
         (0.50, 28.0 / 24.0),
         (0.60, 28.0 / 24.0),
         (0.70, 28.0 / 24.0),
         (0.80, 28.0 / 24.0),
         (0.90, 28.0 / 24.0),
         (1.00, 28.0 / 24.0)
+    ];
+
+    // Pencil: pressure→perceptual darkness scale
+    // Notes:
+    // - Legacy pencil saturates its diameter around pressure≈0.5.
+    // - Past that, perceived darkness continues to increase.
+    // This table is a tunable approximation for parity work.
+    private static readonly (double Pressure, double DarknessScale)[] PencilPressureDarknessScaleTable =
+    [
+        (0.00, 0.16),
+        (0.01, 0.19),
+        (0.05, 0.22),
+        (0.10, 0.28),
+        (0.20, 0.41),
+        (0.30, 0.60),
+        (0.40, 0.79),
+        (0.50, 1.00),
+        (0.60, 1.25),
+        (0.70, 1.50),
+        (0.80, 1.58),
+        (0.90, 1.60),
+        (1.00, 1.65)
     ];
 
     // Legacy observation (UWP): highlighter pressure→visible line height(px)
@@ -229,7 +253,7 @@ public static class LegacyPngRenderer
         using var paint = new SKPaint
         {
             Color = effectiveColor,
-            IsAntialias = true,
+            IsAntialias = false,
             BlendMode = SKBlendMode.SrcOver
         };
 
@@ -241,7 +265,7 @@ public static class LegacyPngRenderer
         // Draw mask as solid alpha (white in Alpha8). Geometry only; no color.
         using var paint = new SKPaint
         {
-            IsAntialias = true,
+            IsAntialias = false,
             Color = SKColors.White,
             Style = SKPaintStyle.Fill
         };
@@ -449,7 +473,7 @@ public static class LegacyPngRenderer
     private static SKPaint CreateStrokePaint(SKColor color, float strokeWidth)
         => new()
         {
-            IsAntialias = true,
+            IsAntialias = false,
             Color = color,
             Style = SKPaintStyle.Stroke,
             StrokeWidth = strokeWidth,
@@ -502,6 +526,20 @@ public static class LegacyPngRenderer
         var heightScale = PchipInterpolate(p, HighlighterPressureHeightScaleTable);
         var shortSideScale = heightScale / Math.Max(0.0001f, tipAspect);
         return Math.Clamp(shortSideScale, 0.05, 10.0);
+    }
+
+    private static double PressureToPencilScale(double pressure)
+    {
+        var p = Clamp01(pressure);
+        var diameterScale = PchipInterpolate(p, PencilPressureDiameterScaleTable);
+        return Math.Max(0.05, diameterScale);
+    }
+
+    private static double PressureToPencilDarknessScale(double pressure)
+    {
+        var p = Clamp01(pressure);
+        var s = PchipInterpolate(p, PencilPressureDarknessScaleTable);
+        return Math.Clamp(s, 0.05, 3.0);
     }
 
     private static double PchipInterpolate(double x, (double X, double Y)[] points)
@@ -636,6 +674,9 @@ public static class LegacyPngRenderer
         }
 
         bool shouldSkipFirstStampInSegment = false;
+        var hasLastStamp = false;
+        var lastStampX = 0f;
+        var lastStampY = 0f;
 
         var stationary = true;
         for (var i = 1; i < points.Count; i++)
@@ -665,6 +706,8 @@ public static class LegacyPngRenderer
 
                 // Stationary strokes: avoid excessive dark dot by using a small, fixed density.
                 var alphaMul = ComputePencilAlphaMultiplier(radius, stepPx: MathF.Max((float)minStepPx, radius * (float)stepScale), densityRef);
+                alphaMul *= (float)PressureToPencilDarknessScale(p.Pressure);
+
                 StampSoftCircle(canvas, (float)p.X, (float)p.Y, radius, effectiveColor, alphaMul);
             }
             return;
@@ -693,8 +736,24 @@ public static class LegacyPngRenderer
 
             if (len <= PencilStationaryEpsilonPx)
             {
+                // If this point is effectively identical to the previous stamp, skip to avoid dark blobs at fold-backs.
+                if (hasLastStamp)
+                {
+                    var ddx = x1 - lastStampX;
+                    var ddy = y1 - lastStampY;
+                    if ((ddx * ddx + ddy * ddy) <= (PencilStationaryEpsilonPx * PencilStationaryEpsilonPx))
+                    {
+                        continue;
+                    }
+                }
+
                 var alphaMul = ComputePencilAlphaMultiplier(radiusBase, stepPx: MathF.Max((float)minStepPx, radiusBase * (float)stepScale), densityRef);
+                alphaMul *= (float)PressureToPencilDarknessScale(pr);
+
                 StampSoftCircle(canvas, x1, y1, radiusBase, effectiveColor, alphaMul);
+                hasLastStamp = true;
+                lastStampX = x1;
+                lastStampY = y1;
                 continue;
             }
 
@@ -706,15 +765,30 @@ public static class LegacyPngRenderer
             // Also avoid over-darkening at direction reversals (fold-back) by not stamping on t=0.
             var s0 = shouldSkipFirstStampInSegment ? 1 : 0;
             shouldSkipFirstStampInSegment = true;
-
+            
             var alphaMulSeg = ComputePencilAlphaMultiplier(radiusBase, stepPx: (float)step, densityRef);
-
+            alphaMulSeg *= (float)PressureToPencilDarknessScale(pr);
+            
             for (var s = s0; s <= steps; s++)
             {
                 var t = steps == 0 ? 0f : (s / (float)steps);
                 var x = x0 + dx * t;
                 var y = y0 + dy * t;
+
+                if (hasLastStamp)
+                {
+                    var ddx = x - lastStampX;
+                    var ddy = y - lastStampY;
+                    if ((ddx * ddx + ddy * ddy) <= (PencilStationaryEpsilonPx * PencilStationaryEpsilonPx))
+                    {
+                        continue;
+                    }
+                }
+
                 StampSoftCircle(canvas, x, y, radiusBase, effectiveColor, alphaMulSeg);
+                hasLastStamp = true;
+                lastStampX = x;
+                lastStampY = y;
             }
         }
     }
@@ -743,11 +817,15 @@ public static class LegacyPngRenderer
         // Pencil: textured stamp (deterministic noise masked by a radial falloff).
         // This avoids ink/marker-like smooth gradients and yields a powdery look.
 
-        const float opacityMultiplier = 0.10f;
+        const float opacityMultiplier = 0.12f;
         const byte maskInnerA = 100;
         const byte maskMidA = 70;
-        const float maskMidPos = 0.8f;
-        const float noiseScale = 0.50f;
+        const float maskMidPos = 0.50f;
+
+        // Larger value -> larger grain (less tiling frequency across a stamp).
+        // Radius-dependent so small stamps don't look too blocky while large stamps keep visible grain.
+        const float noiseScaleSmall = 1.10f;
+        const float noiseScaleLarge = 1.75f;
 
         var am = Math.Clamp(alphaMultiplier, 0.01f, 10.0f);
         var a = (byte)Math.Clamp((int)Math.Round(color.Alpha * opacityMultiplier * am), 0, 255);
@@ -773,7 +851,7 @@ public static class LegacyPngRenderer
 
         using var paint = new SKPaint
         {
-            IsAntialias = true,
+            IsAntialias = false,
             Style = SKPaintStyle.Fill,
             Shader = brushShader,
             BlendMode = SKBlendMode.SrcOver
@@ -794,6 +872,9 @@ public static class LegacyPngRenderer
         // Noise shader (alpha): tiled; sized in device space.
         // Add a phase offset per stamp to avoid periodic banding caused by fixed-origin tiling.
         var noiseBmp = PencilBrushTexture.GetAlphaNoise(PencilNoiseTextureSizePx);
+
+        // Make grain larger while keeping small stamps usable.
+        var noiseScale = Lerp(noiseScaleSmall, noiseScaleLarge, Math.Clamp((radius - 2.0f) / 10.0f, 0f, 1f));
         var sx = (radius * noiseScale) / (PencilNoiseTextureSizePx * 0.5f);
         var sy = (radius * noiseScale) / (PencilNoiseTextureSizePx * 0.5f);
 
@@ -866,7 +947,7 @@ public static class LegacyPngRenderer
             using var stage1 = SKSurface.Create(info);
             stage1.Canvas.Clear(SKColors.Transparent);
             stage1.Canvas.DrawCircle(c, c, radius, paint);
-            using (var mp = new SKPaint { Shader = SKShader.CreateRadialGradient(new SKPoint(c, c), maskRadius, new[] { maskInner, maskMid, maskOuter }, new[] { 0.0f, midPos, 1.0f }, SKShaderTileMode.Clamp), BlendMode = SKBlendMode.DstIn, IsAntialias = true })
+            using (var mp = new SKPaint { Shader = SKShader.CreateRadialGradient(new SKPoint(c, c), maskRadius, new[] { maskInner, maskMid, maskOuter }, new[] { 0.0f, midPos, 1.0f }, SKShaderTileMode.Clamp), BlendMode = SKBlendMode.DstIn, IsAntialias = false })
             {
                 stage1.Canvas.DrawRect(new SKRect(0, 0, s, s), mp);
             }
@@ -874,7 +955,7 @@ public static class LegacyPngRenderer
             using var stage2 = SKSurface.Create(info);
             stage2.Canvas.Clear(SKColors.Transparent);
             stage2.Canvas.DrawCircle(c, c, radius, paint);
-            using (var mp = new SKPaint { Shader = SKShader.CreateRadialGradient(new SKPoint(c, c), maskRadius, new[] { maskInner, maskMid, maskOuter }, new[] { 0.0f, midPos, 1.0f }, SKShaderTileMode.Clamp), BlendMode = SKBlendMode.DstIn, IsAntialias = true })
+            using (var mp = new SKPaint { Shader = SKShader.CreateRadialGradient(new SKPoint(c, c), maskRadius, new[] { maskInner, maskMid, maskOuter }, new[] { 0.0f, midPos, 1.0f }, SKShaderTileMode.Clamp), BlendMode = SKBlendMode.DstIn, IsAntialias = false })
             {
                 stage2.Canvas.DrawRect(new SKRect(0, 0, s, s), mp);
             }
@@ -882,7 +963,7 @@ public static class LegacyPngRenderer
             {
                 Shader = noiseShader,
                 BlendMode = SKBlendMode.DstIn,
-                IsAntialias = true
+                IsAntialias = false
             })
             {
                 stage2.Canvas.DrawRect(new SKRect(0, 0, s, s), np);
@@ -969,14 +1050,14 @@ public static class LegacyPngRenderer
             // Optional legacy radial mask path (DstIn). Default disabled due to banding.
             if (EnvFlag("BRAIN_CARD_PENCIL_ENABLE_RADIAL_MASK"))
             {
-                using var mp = new SKPaint { Shader = maskShader, BlendMode = SKBlendMode.DstIn, IsAntialias = true };
+                using var mp = new SKPaint { Shader = maskShader, BlendMode = SKBlendMode.DstIn, IsAntialias = false };
                 canvas.DrawRect(rect, mp);
             }
 
             // Toggle: disable noise masking to diagnose banding/striping.
             if (!EnvFlag("BRAIN_CARD_PENCIL_DISABLE_NOISE"))
             {
-                using var np = new SKPaint { Shader = noiseShader, BlendMode = SKBlendMode.DstIn, IsAntialias = true };
+                using var np = new SKPaint { Shader = noiseShader, BlendMode = SKBlendMode.DstIn, IsAntialias = false };
                 canvas.DrawRect(rect, np);
             }
         }
@@ -984,13 +1065,6 @@ public static class LegacyPngRenderer
         {
             canvas.RestoreToCount(save);
         }
-    }
-
-    private static double PressureToPencilScale(double pressure)
-    {
-        var p = Clamp01(pressure);
-        var diameterScale = PchipInterpolate(p, PencilPressureDiameterScaleTable);
-        return Math.Max(0.05, diameterScale);
     }
 
     private static int _pencilStampDumpCounter;
